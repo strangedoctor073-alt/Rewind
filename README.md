@@ -1,8 +1,8 @@
 # REWIND
 
-> Record a supported web interaction. Scrub backward through it. Replay any moment.
+> Record a supported web interaction. Scrub backward through it. Replay any moment. Undo the last one cleanly.
 
-REWIND is a local-first interaction recorder for web experiences you control. Instead of a video, it stores a compact timeline of meaningful events and the state needed to reconstruct each moment.
+REWIND is a local-first interaction recorder for web experiences you control. Instead of a video, it stores a compact timeline of meaningful events and the state needed to reconstruct each moment — which also means it can undo: pop the last event off the timeline and the UI snaps back to the exact state that was recorded before it, not a best guess.
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-d9ff58?style=flat-square)
 ![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square)
@@ -10,12 +10,13 @@ REWIND is a local-first interaction recorder for web experiences you control. In
 
 ## Why this is different
 
-Screen recordings show what happened. REWIND lets you move through what happened.
+Screen recordings show what happened. REWIND lets you move through what happened — and step back out of it.
 
-Use the demo to record an interaction, then drag the timeline backward. The product state changes with the playhead: selected size, typed promo code, bag count, and event details all return to the state at that point in time.
+Use the demo to record an interaction, then drag the timeline backward. The product state changes with the playhead: selected size, typed promo code, bag count, scroll position, and event details all return to the state at that point in time. Hit Undo (or `Ctrl/Cmd+Z`) and the same mechanism runs live: the last action is popped and the surface reverts, because the exact prior state was already captured — no inverse-action guessing required.
 
 This makes REWIND useful for:
 
+- undoing the last few actions in a flow with pixel-exact state restoration, not a generic back button;
 - reproducing a UI flow without retelling every click;
 - sharing a compact, inspectable bug report;
 - reviewing a checkout, onboarding, or product experiment;
@@ -38,13 +39,17 @@ Open the local URL, then:
 
 ## What works today
 
-- Event capture for clicks, text input, and scroll events within the supported demo surface.
-- Timeline scrubbing and play/pause.
-- State reconstruction for the demo's selected size, promo code, and bag count.
-- Event inspector and previous-state comparison.
+- Event capture for clicks, text input, and scroll events within the supported demo surface — scroll position is captured too, not just clicks and typing.
+- Timeline scrubbing, play/pause, and 1x/2x/4x replay speed.
+- State reconstruction for the demo's selected size, promo code, bag count, and scroll position.
+- Event inspector: event type, target, action, recorded size (bytes), and viewport.
 - JSON export/import with a versioned recording format.
-- Local persistence using IndexedDB.
+- Local persistence using IndexedDB — recordings survive a reload, a session list in the sidebar lets you switch between or delete saved recordings, and "Clear local data" wipes everything for a clean-slate test.
+- Undo / redo for the current session — pop the last recorded action off the timeline and the demo surface snaps back to the exact reconstructed state (including scroll position) using the event's own stored snapshot, not a guessed inverse. Works live while recording or on any loaded/saved session; branches (new actions after an undo) clear the redo stack.
+- Keyboard shortcuts (press `?` in the app to see them): Space to play/pause, arrow keys to step between events, `Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z` to undo/redo, `R` to record, `E` to export.
 - Responsive interface designed for a short, understandable demo.
+
+See [`MANUAL_TESTING.md`](MANUAL_TESTING.md) for the checklist this behavior is verified against.
 
 ## Record a real website tab
 

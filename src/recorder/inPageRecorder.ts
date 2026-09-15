@@ -8,6 +8,7 @@ export class InPageRecorder {
   private startedAt = 0
   private listener: EventListener | null = null
   private root: HTMLElement | null = null
+  private scrollFrame: number | null = null
 
   start(root: HTMLElement, listener: EventListener) {
     this.startedAt = performance.now()
@@ -23,6 +24,8 @@ export class InPageRecorder {
     this.root.removeEventListener('click', this.onClick)
     this.root.removeEventListener('input', this.onInput)
     this.root.removeEventListener('scroll', this.onScroll, true)
+    if (this.scrollFrame !== null) cancelAnimationFrame(this.scrollFrame)
+    this.scrollFrame = null
     this.root = null
     this.listener = null
   }
@@ -43,6 +46,11 @@ export class InPageRecorder {
 
   private onScroll = (event: Event) => {
     const target = event.target instanceof HTMLElement ? event.target : null
-    if (target) this.capture('scroll', 'SCROLL', 'Scrolled workspace', 'Viewport movement recorded', target)
+    if (!target || this.scrollFrame !== null) return
+    this.scrollFrame = requestAnimationFrame(() => {
+      this.scrollFrame = null
+      const position = Math.round(target.scrollTop)
+      this.capture('scroll', 'SCROLL', 'Scrolled workspace', `Scrolled to ${position}px`, target, String(position))
+    })
   }
 }

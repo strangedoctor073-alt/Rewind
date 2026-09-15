@@ -5,6 +5,7 @@ export interface ReplaySnapshot {
   promoCode: string
   bagCount: number
   message: string
+  scrollY?: number
 }
 
 export interface RecordingEvent {

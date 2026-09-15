@@ -31,3 +31,36 @@ export async function getRecording(id: string) {
   database.close()
   return recording
 }
+
+export async function getAllRecordings() {
+  const database = await openDatabase()
+  const recordings = await new Promise<Recording[]>((resolve, reject) => {
+    const request = database.transaction(storeName, 'readonly').objectStore(storeName).getAll()
+    request.onsuccess = () => resolve((request.result as Recording[] | undefined) ?? [])
+    request.onerror = () => reject(request.error)
+  })
+  database.close()
+  return recordings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
+export async function deleteRecording(id: string) {
+  const database = await openDatabase()
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(storeName, 'readwrite')
+    transaction.objectStore(storeName).delete(id)
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+  })
+  database.close()
+}
+
+export async function clearAllRecordings() {
+  const database = await openDatabase()
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(storeName, 'readwrite')
+    transaction.objectStore(storeName).clear()
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+  })
+  database.close()
+}
