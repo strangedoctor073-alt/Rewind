@@ -1,0 +1,23 @@
+.title-input {
+  width: min(600px, 100%);
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #f4f4f1;
+  font: inherit;
+  font-size: clamp(24px, 2.25vw, 31px);
+  font-weight: 750;
+  letter-spacing: -.05em;
+}
+.title-input:hover, .title-input:focus { border-bottom-color: #596067; outline: none; }
+.sidebar nav button, .sidebar footer a { display: block; width: 100%; padding: 10px; border: 0; border-radius: 5px; background: transparent; color: #a5aab0; font: inherit; font-size: 12px; text-align: left; text-decoration: none; }
+.sidebar nav button:hover, .sidebar footer a:hover { background: #202329; color: #fff; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; clip-path: inset(50%); }
+.demo-message { min-height: 16px; margin: 9px 0 0 !important; color: #73716a !important; font-size: 9px !important; }
+.promo:disabled { cursor: not-allowed; background: #f2f0ec; color: #98958e; }
+.snapshot em { display: block; width: max-content; max-width: 120px; margin-top: 6px; overflow: hidden; color: #6a6760; font-size: 9px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.event i { width: 30px; min-width: 30px; padding: 2px; font-size: 7px; font-weight: 800; }
+.event-summary > i { width: 42px; min-width: 42px; padding: 3px; font-size: 8px; font-weight: 800; text-align: center; }
+.speed:disabled { cursor: default; opacity: .7; }
+@media (max-width: 760px) { .title-input { font-size: 25px; }.header-controls button { padding: 10px; }.demo-product { grid-template-columns: 1fr; }.product-photo { min-height: 150px; }.product-info { padding-top: 0; } }

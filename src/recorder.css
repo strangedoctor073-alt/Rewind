@@ -1,0 +1,20 @@
+.promo {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  border: 1px solid #c3bfb6;
+  background: #fff;
+  color: #20211e;
+  font-size: 9px;
+}
+
+.add { margin-top: 10px; }
+
+.controls .play {
+  flex: 0 0 31px;
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+}
