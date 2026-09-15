@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>REWIND Recorder</title>
+  </head>
+  <body>
+    <main>
+      <header><span class="mark">R</span><strong>REWIND</strong><small>Recorder</small></header>
+      <p id="site" class="site">Checking current tab...</p>
+      <section class="status"><i id="status-dot"></i><span id="status">Ready to record this tab</span></section>
+      <button id="record" class="primary">Start recording</button>
+      <button id="export" class="secondary" disabled>Export latest recording</button>
+      <p id="message" class="message">REWIND only records after you explicitly start it on this tab.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

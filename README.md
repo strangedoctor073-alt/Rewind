@@ -46,6 +46,18 @@ Open the local URL, then:
 - Local persistence using IndexedDB.
 - Responsive interface designed for a short, understandable demo.
 
+## Record a real website tab
+
+The web app cannot observe another website by itself. REWIND therefore includes a Chrome/Edge extension that records the tab you explicitly authorize using the browser's temporary `activeTab` permission.
+
+1. Open [`extension/README.md`](extension/README.md) and load the `extension` folder as an unpacked extension.
+2. Visit the website you want to record, then choose **Start recording** in the REWIND extension popup.
+3. Interact with that same tab and stop the session in the popup.
+4. Export the `.rewind.json` file from the popup.
+5. In the REWIND dashboard, select **Import recording** to browse its timeline.
+
+The extension records real tab events, but the current dashboard only reconstructs full visual state for the built-in supported demo. Reconstructing arbitrary third-party pages is a separate opt-in adapter/snapshot problem and is not yet shipped.
+
 ## What REWIND does *not* claim to do
 
 Browsers intentionally prevent one webpage from freely reading, controlling, or reconstructing every other site. This app therefore records a **supported surface**: the interactive UI embedded in REWIND, or, in a future integration, a page where the recorder has explicit permission.

@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "REWIND Recorder",
+  "version": "0.1.0",
+  "description": "Record interactions in the current tab with your explicit permission.",
+  "action": {
+    "default_title": "REWIND Recorder",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["activeTab", "scripting", "storage"]
+}
