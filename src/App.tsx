@@ -23,11 +23,7 @@ function snapshotFor(event: RecordingEvent, previous: ReplaySnapshot): ReplaySna
   return { ...previous, message: event.label }
 }
 
-function isValidRecording(value: unknown): value is Recording {
-  if (!value || typeof value !== 'object') return false
-  const candidate = value as Partial<Recording>
-  return candidate.schemaVersion === 1 && typeof candidate.id === 'string' && typeof candidate.title === 'string' && typeof candidate.createdAt === 'string' && typeof candidate.duration === 'number' && Array.isArray(candidate.events) && candidate.events.length > 0
-}
+import { isValidRecording } from './utils/validation'
 
 function App() {
   const [events, setEvents] = useState<RecordingEvent[]>(demoRecording.events)

@@ -15,7 +15,24 @@
     if (element.dataset.rewindTarget) return `[data-rewind-target="${element.dataset.rewindTarget}"]`
     const name = element.getAttribute('name')
     if (name) return `${element.tagName.toLowerCase()}[name="${name}"]`
-    return element.tagName.toLowerCase()
+    // No stable attribute to key off — fall back to a short nth-of-type path
+    // instead of a bare tag name, so events stay distinguishable in the
+    // inspector even on markup with no ids/names. Not a replay-grade
+    // selector engine (that's a later phase), just a cheap improvement.
+    const path = []
+    let node = element
+    for (let depth = 0; node instanceof Element && depth < 4; depth += 1) {
+      const parent = node.parentElement
+      let part = node.tagName.toLowerCase()
+      if (parent) {
+        const siblings = Array.from(parent.children).filter((child) => child.tagName === node.tagName)
+        if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(node) + 1})`
+      }
+      path.unshift(part)
+      if (node.id) { path[0] = `#${CSS.escape(node.id)}`; break }
+      node = parent
+    }
+    return path.join(' > ')
   }
 
   const label = (element) => element.getAttribute('aria-label') || element.getAttribute('data-rewind-label') || element.textContent?.trim().replace(/\s+/g, ' ').slice(0, 80) || element.tagName.toLowerCase()
@@ -50,6 +67,11 @@
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'REWIND_START') { active = true; startedAt = performance.now(); sendResponse({ ok: true }); return }
-    if (message.type === 'REWIND_STOP') { active = false; sendResponse({ ok: true, duration: Math.round(performance.now() - startedAt) }) }
+    if (message.type === 'REWIND_STOP') { active = false; sendResponse({ ok: true, duration: Math.round(performance.now() - startedAt) }); return }
+    // Scroll restoration should work even after recording has stopped, as
+    // long as this page hasn't navigated away (which would tear this content
+    // script down and make it unreachable — the background script handles
+    // that failure case by simply not being able to message it).
+    if (message.type === 'REWIND_SCROLL_TO') { window.scrollTo({ top: message.scrollY || 0, behavior: 'smooth' }); sendResponse({ ok: true }) }
   })
 })()

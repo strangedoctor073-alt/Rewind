@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="hud.css" />
+    <title>REWIND Time Machine</title>
+  </head>
+  <body>
+    <!-- Floating HUD Compact Pill -->
+    <div class="hud-pill" id="hud-pill">
+      <div class="drag-handle" title="Drag REWIND anywhere on screen">
+        <span class="hud-brand-mark">R</span>
+        <span class="pulse-ring"><i id="rec-dot"></i></span>
+      </div>
+
+      <div class="hud-context">
+        <span id="app-badge" class="app-badge">desktop</span>
+        <span id="window-title" class="window-title">Initializing REWIND...</span>
+      </div>
+
+      <div class="hud-controls">
+        <button id="undo-btn" class="hud-btn hud-undo" title="Undo change in active app (Ctrl+Z)">
+          <span class="icon">↶</span>
+          <span>Undo</span>
+        </button>
+        <button id="timeline-toggle-btn" class="hud-btn hud-timeline" title="Expand Time Machine (Ctrl+Alt+Z)">
+          <span class="icon">⏱</span>
+          <span>Timeline</span>
+        </button>
+        <button id="pause-btn" class="hud-btn hud-pause" title="Pause recording (15m)">
+          <span class="icon" id="pause-icon">⏸</span>
+        </button>
+        <button id="backup-badge" class="hud-backup" title="Auto-backup saves every 20s">
+          <span class="backup-dot"></span>
+          <span id="backup-timer">20s</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Expanded Time Machine Overlay -->
+    <div class="time-machine-view hidden" id="time-machine-view">
+      <!-- Header bar with search and tabs -->
+      <div class="tm-header">
+        <div class="tm-brand">
+          <span class="hud-brand-mark">R</span>
+          <span class="tm-title">REWIND TIME MACHINE</span>
+          <span class="tm-badge" id="tm-event-count">0 moments</span>
+        </div>
+
+        <div class="tm-search-box">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            id="tm-search-input"
+            class="tm-search-input"
+            placeholder="Search windows, errors, commands, titles... (Ctrl+K)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <kbd class="kbd-hint">Ctrl+Alt+Z / Esc</kbd>
+        </div>
+
+        <div class="tm-nav-tabs">
+          <button id="tab-timeline" class="tm-tab active">
+            <span class="icon">⏱</span>
+            <span>Timeline</span>
+          </button>
+          <button id="tab-clipboard" class="tm-tab">
+            <span class="icon">📋</span>
+            <span>Clipboard</span>
+            <span class="tab-badge" id="clip-count-badge">0</span>
+          </button>
+        </div>
+
+        <div class="tm-action-tools">
+          <button id="sound-toggle-btn" class="tm-icon-btn" title="Toggle tactile mechanical tick sound (Currently ON)">
+            <span id="sound-icon">🔊</span>
+          </button>
+          <button id="export-gif-btn" class="tm-export-btn" title="Export the last 5 seconds as an animated GIF">
+            <span>⚡</span>
+            <span>Export 5s GIF</span>
+          </button>
+          <button id="tm-close-btn" class="tm-close-btn" title="Close Time Machine (Esc)">✕</button>
+        </div>
+      </div>
+
+      <!-- Scrubber Track & Quick Jump Presets -->
+      <div class="tm-scrubber-bar">
+        <div class="tm-presets">
+          <button class="preset-btn active" data-filter="all">All</button>
+          <button class="preset-btn" data-filter="recent">Last 15m</button>
+          <button class="preset-btn" data-filter="closed">Closed Apps</button>
+          <button class="preset-btn" data-filter="terminals">⚡ Terminals</button>
+        </div>
+        <div class="tm-hint">Scroll horizontally or use ← / → to scrub history with tactile audio</div>
+      </div>
+
+      <!-- Main Horizontal Filmstrip Section -->
+      <div class="tm-content-area" id="tm-content-area">
+        <div class="filmstrip-container" id="filmstrip-container">
+          <div class="filmstrip-track" id="filmstrip-track">
+            <!-- Dynamically populated cards -->
+          </div>
+        </div>
+
+        <!-- Clipboard History Panel (hidden by default) -->
+        <div class="clipboard-panel hidden" id="clipboard-panel">
+          <div class="clipboard-list" id="clipboard-list">
+            <!-- Dynamically populated clipboard snippets -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Notice Banner for Terminal State Restoration -->
+      <div id="terminal-disclaimer-banner" class="disclaimer-banner hidden">
+        <span class="disclaimer-icon">ℹ️</span>
+        <span class="disclaimer-text">
+          <strong>Restoration Notice:</strong> Prior terminal output, environment, and command history are restored. Commands already executed on your machine cannot be rolled back.
+        </span>
+        <button id="dismiss-disclaimer-btn" class="disclaimer-close">✕</button>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="hud.js"></script>
+  </body>
+</html>

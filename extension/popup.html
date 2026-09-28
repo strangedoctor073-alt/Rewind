@@ -7,13 +7,67 @@
     <title>REWIND Recorder</title>
   </head>
   <body>
-    <main>
-      <header><span class="mark">R</span><strong>REWIND</strong><small>Recorder</small></header>
-      <p id="site" class="site">Checking current tab...</p>
-      <section class="status"><i id="status-dot"></i><span id="status">Ready to record this tab</span></section>
-      <button id="record" class="primary">Start recording</button>
-      <button id="export" class="secondary" disabled>Export latest recording</button>
-      <p id="message" class="message">REWIND only records after you explicitly start it on this tab.</p>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div class="brand">
+          <span class="brand-mark">R</span>
+          <span class="brand-name">REWIND</span>
+        </div>
+        <span class="version-tag">v0.2.0</span>
+      </header>
+
+      <section class="site-card">
+        <div class="site-header">
+          <span class="site-label">TARGET TAB</span>
+          <span id="connection-badge" class="connection-badge">Active</span>
+        </div>
+        <div class="site-row">
+          <svg class="site-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+          <span id="site" class="site-host">Detecting browser tab...</span>
+        </div>
+      </section>
+
+      <section class="status-card" id="status-card">
+        <div class="pulse-indicator">
+          <i id="status-dot"></i>
+        </div>
+        <div class="status-info">
+          <div id="status-heading" class="status-heading">Ready to record</div>
+          <div id="status" class="status-sub">Click start to capture clicks, typing & scroll</div>
+        </div>
+      </section>
+
+      <div class="button-group">
+        <button id="record" class="btn btn-record">
+          <span class="record-symbol">●</span>
+          <span id="record-text">Start recording</span>
+        </button>
+        <div class="btn-row">
+          <button id="history" class="btn btn-secondary">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Timeline
+          </button>
+          <button id="export" class="btn btn-secondary" disabled>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export JSON
+          </button>
+        </div>
+      </div>
+
+      <footer class="popup-footer">
+        <p id="message" class="message">Local-first • Private by default • Zero telemetry</p>
+      </footer>
     </main>
     <script src="popup.js"></script>
   </body>

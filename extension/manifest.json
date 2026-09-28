@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "REWIND Recorder",
-  "version": "0.1.0",
-  "description": "Record interactions in the current tab with your explicit permission.",
+  "version": "0.2.0",
+  "description": "Record interactions in an authorized browser tab, browse the history, and rewind to an earlier point.",
   "action": {
     "default_title": "REWIND Recorder",
     "default_popup": "popup.html"
@@ -11,5 +11,5 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "scripting", "storage"]
+  "permissions": ["activeTab", "scripting", "storage", "tabs"]
 }
