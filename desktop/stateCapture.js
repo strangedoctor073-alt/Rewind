@@ -11,6 +11,12 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { restoreWindowPosition } from './win32.js'
 
+let spawnFn = spawn
+
+export function _setSpawnForTesting(fn) {
+  spawnFn = fn || spawn
+}
+
 export const MAX_STATE_SIZE_BYTES = 5 * 1024 * 1024 // 5 MiB limit
 
 export const TERMINAL_PROCESSES = new Set([
@@ -163,7 +169,10 @@ export class StateCaptureEngine {
           ? state.cwd
           : (process.env.USERPROFILE || 'C:\\')
 
-        const shellExe = state.exePath || (process.platform === 'win32' ? 'cmd.exe' : '/bin/sh')
+        let shellExe = state.exePath || (process.platform === 'win32' ? 'cmd.exe' : (process.env.SHELL || '/bin/sh'))
+        if (process.platform !== 'win32' && shellExe.toLowerCase().endsWith('.exe')) {
+          shellExe = process.env.SHELL || '/bin/sh'
+        }
 
         // Spawn shell in original working directory
         let child
@@ -171,27 +180,32 @@ export class StateCaptureEngine {
           // If CMD, use /K to keep open and optionally display restore header
           if (shellExe.toLowerCase().endsWith('cmd.exe')) {
             const header = `[REWIND] Terminal state restored. Working directory: ${cwd}`
-            child = spawn('cmd.exe', ['/K', `title Restored Terminal && echo ${header}`], {
+            child = spawnFn('cmd.exe', ['/K', `title Restored Terminal && echo ${header}`], {
               cwd,
               detached: true,
               stdio: 'ignore',
             })
           } else {
-            child = spawn(shellExe, [], {
+            child = spawnFn(shellExe, [], {
               cwd,
               detached: true,
               stdio: 'ignore',
             })
           }
         } else {
-          child = spawn(shellExe, [], {
+          child = spawnFn(shellExe, [], {
             cwd,
             detached: true,
             stdio: 'ignore',
           })
         }
 
-        if (child) child.unref()
+        if (child) {
+          child.on('error', (err) => {
+            console.warn('[REWIND StateCapture] Spawned shell warning/error:', err.message)
+          })
+          child.unref()
+        }
 
         return {
           success: true,
@@ -203,11 +217,16 @@ export class StateCaptureEngine {
 
       // Generic window resurrection
       if (state.exePath && fs.existsSync(state.exePath)) {
-        const child = spawn(state.exePath, [], {
+        const child = spawnFn(state.exePath, [], {
           detached: true,
           stdio: 'ignore',
         })
-        child.unref()
+        if (child) {
+          child.on('error', (err) => {
+            console.warn('[REWIND StateCapture] Spawned app warning/error:', err.message)
+          })
+          child.unref()
+        }
 
         return {
           success: true,

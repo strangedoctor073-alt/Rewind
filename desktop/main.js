@@ -24,12 +24,14 @@ import { StateCaptureEngine } from './stateCapture.js'
 import { GifExporter } from './gifExporter.js'
 import { OcrEngine } from './ocrEngine.js'
 import { GameAndBatteryGuard } from './gameGuard.js'
+import { StatsEngine } from './statsEngine.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 let hudWindow = null
 let backupEngine = null
 let clipboardEngine = null
+let statsEngine = null
 let ocrEngine = new OcrEngine()
 let gameGuard = new GameAndBatteryGuard()
 let lastActiveWindow = null
@@ -195,6 +197,7 @@ function startWindowMonitor() {
         currentSession.events.unshift(focusEvent)
         if (currentSession.events.length > 200) currentSession.events.pop()
         backupEngine?.markDirty(currentSession)
+        statsEngine?.recordWindowSwitch(current.processName)
         lastActiveWindow = current
 
         // Update compact HUD
@@ -238,6 +241,10 @@ app.whenReady().then(() => {
     }
   })
   backupEngine.start()
+
+  // Initialize Productivity & Focus Stats Engine
+  const statsDir = path.join(app.getPath('userData'), 'rewind_stats')
+  statsEngine = new StatsEngine(statsDir, 30)
 
   // Initialize privacy-screened Clipboard Engine
   clipboardEngine = new ClipboardEngine(50)
@@ -284,6 +291,9 @@ app.whenReady().then(() => {
   ipcMain.on('trigger-undo', async () => {
     if (lastActiveWindow?.hwnd) {
       const success = await sendCtrlZ(lastActiveWindow.hwnd, 500)
+      if (success) {
+        statsEngine?.recordRescue('undo')
+      }
       if (hudWindow && !hudWindow.isDestroyed()) {
         hudWindow.webContents.send('undo-result', {
           success,
@@ -306,6 +316,7 @@ app.whenReady().then(() => {
     // If full state payload is available, use StateCaptureEngine with disclaimer
     if (eventSnapshot?.statePayload) {
       const result = await StateCaptureEngine.resurrectState(eventSnapshot.statePayload)
+      if (result?.success) statsEngine?.recordRescue('terminal_resurrect')
       event.reply('restore-moment-result', result)
       return
     }
@@ -318,6 +329,7 @@ app.whenReady().then(() => {
         exePath: eventSnapshot.exePath,
         cwd: process.env.USERPROFILE || 'C:\\',
       })
+      if (result?.success) statsEngine?.recordRescue('terminal_resurrect')
       event.reply('restore-moment-result', result)
       return
     }
@@ -360,6 +372,80 @@ app.whenReady().then(() => {
   ipcMain.on('copy-to-clipboard', (_event, text) => {
     if (text) {
       clipboard.writeText(text)
+      statsEngine?.recordRescue('clipboard_restore')
+    }
+  })
+
+  // IPC listeners for Productivity Stats
+  ipcMain.on('get-productivity-stats', (event) => {
+    event.reply('productivity-stats-result', statsEngine ? statsEngine.getSummary() : null)
+  })
+
+  ipcMain.on('reset-productivity-stats', (event) => {
+    statsEngine?.reset()
+    event.reply('productivity-stats-result', statsEngine?.getSummary())
+  })
+
+  // IPC listeners for Checkpoints & Backup Management
+  ipcMain.on('get-checkpoints', (event) => {
+    event.reply('checkpoints-list-result', backupEngine ? backupEngine.listCheckpoints() : [])
+  })
+
+  ipcMain.on('create-checkpoint', (event, label) => {
+    try {
+      const chk = backupEngine.createCheckpoint(label || 'Manual Checkpoint', currentSession)
+      event.reply('checkpoint-created-result', {
+        success: true,
+        checkpoint: chk,
+        checkpoints: backupEngine.listCheckpoints(),
+      })
+    } catch (err) {
+      event.reply('checkpoint-created-result', { success: false, error: err.message })
+    }
+  })
+
+  ipcMain.on('restore-checkpoint', (event, id) => {
+    try {
+      const session = backupEngine.restoreCheckpoint(id)
+      if (session) {
+        currentSession = session
+        backupEngine.markDirty(currentSession)
+        event.reply('restore-checkpoint-result', {
+          success: true,
+          eventCount: currentSession.events?.length || 0,
+        })
+        if (hudWindow && !hudWindow.isDestroyed()) {
+          hudWindow.webContents.send('time-machine-state', {
+            expanded: isTimeMachineExpanded,
+            events: currentSession.events,
+            clipboards: clipboardEngine ? clipboardEngine.getHistory() : [],
+            isPaused,
+          })
+        }
+      } else {
+        event.reply('restore-checkpoint-result', { success: false, error: 'Checkpoint not found' })
+      }
+    } catch (err) {
+      event.reply('restore-checkpoint-result', { success: false, error: err.message })
+    }
+  })
+
+  ipcMain.on('delete-checkpoint', (event, id) => {
+    const success = backupEngine ? backupEngine.deleteCheckpoint(id) : false
+    event.reply('delete-checkpoint-result', {
+      success,
+      checkpoints: backupEngine ? backupEngine.listCheckpoints() : [],
+    })
+  })
+
+  ipcMain.on('export-backup-bundle', (event) => {
+    try {
+      const downloadsDir = app.getPath('downloads') || process.cwd()
+      const targetPath = path.join(downloadsDir, `rewind-backup-${Date.now()}.rewind.backup`)
+      const res = backupEngine.exportBackupBundle(targetPath)
+      event.reply('export-backup-bundle-result', res)
+    } catch (err) {
+      event.reply('export-backup-bundle-result', { success: false, error: err.message })
     }
   })
 

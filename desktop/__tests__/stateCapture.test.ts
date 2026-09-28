@@ -1,13 +1,19 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   StateCaptureEngine,
   TERMINAL_DISCLAIMER,
   MAX_STATE_SIZE_BYTES,
   encryptPayload,
   decryptPayload,
+  _setSpawnForTesting,
 } from '../stateCapture.js'
 
 describe('StateCaptureEngine', () => {
+  afterEach(() => {
+    _setSpawnForTesting(null)
+    vi.restoreAllMocks()
+  })
+
   it('identifies terminal and shell processes correctly', () => {
     expect(StateCaptureEngine.isTerminal('cmd.exe')).toBe(true)
     expect(StateCaptureEngine.isTerminal('powershell.exe')).toBe(true)
@@ -61,6 +67,13 @@ describe('StateCaptureEngine', () => {
   })
 
   it('resurrects terminal with executed-command disclaimer notification', async () => {
+    const mockChild = {
+      unref: vi.fn(),
+      on: vi.fn(),
+    }
+    const mockSpawn = vi.fn().mockReturnValue(mockChild)
+    _setSpawnForTesting(mockSpawn)
+
     const state = {
       appType: 'terminal',
       processName: 'cmd.exe',
@@ -73,5 +86,8 @@ describe('StateCaptureEngine', () => {
     expect(res.success).toBe(true)
     expect(res.action).toBe('resurrected_terminal')
     expect(res.disclaimer).toBe(TERMINAL_DISCLAIMER)
+    expect(mockSpawn).toHaveBeenCalled()
+    expect(mockChild.unref).toHaveBeenCalled()
+    expect(mockChild.on).toHaveBeenCalledWith('error', expect.any(Function))
   })
 })

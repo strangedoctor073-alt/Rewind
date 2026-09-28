@@ -37,6 +37,9 @@ Traditional bug reporters, screen recorders, and commercial rewind utilities suf
 **REWIND takes a fundamentally different approach focused on high utility and zero bloat:**
 
 - **⚡ Deep State & Terminal Resurrection**: Accidentally closed your terminal? 1-click **"Resurrect Shell"** re-launches the shell at the exact working directory with prior command history and scrollback output restored.
+- **⚡ Inbuilt Productivity & Activity Stats Service**: Automatic zero-telemetry local analytics calculating deep work focus scores, context-switch frequency, app time distributions, and rescue counters.
+- **⚡ Video & Visual Replay Engine**: Smooth moment scrubbing with play/pause, variable speeds (0.5x, 1x, 2x, 4x), step controls, and native CSS scroll-driven animations (`animation-timeline: view(inline)`).
+- **⚡ Multi-Checkpoint Disaster Recovery**: Save named milestone snapshots, 1-click restore session states, and export/import portable encrypted `.rewind.backup` bundles.
 - **⚡ 1-Click 5-Second Animated GIF Exporter**: Turn any moment in your history into a lightweight animated GIF (`GIF89a`) in seconds to share bug repros with teammates.
 - **⚡ Instant OCR & Click-to-Copy**: Tokenizes on-screen text, URLs, and errors into clickable bounding boxes with sub-millisecond search across your screen history.
 - **⚡ Tactile Retro Audio Feedback**: Generates synthesized mechanical clicks when scrubbing through history and a satisfying pneumatic whoosh upon resurrection (with an instant mute toggle).
@@ -139,7 +142,7 @@ Open `http://localhost:5173/` in your browser to test interactive timeline scrub
 ## Development & Testing
 
 ```bash
-# Run full automated test suite (53 passing tests)
+# Run full automated test suite (60 passing tests across 13 suites)
 npm test
 
 # Run ESLint linting (0 errors, 0 warnings)

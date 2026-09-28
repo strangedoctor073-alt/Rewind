@@ -2,9 +2,11 @@
  * REWIND Desktop Ultimate - Floating HUD & Time Machine Client
  * Features:
  * - Tactile synthesized mechanical ticks on scrubber movement
+ * - Smooth Video & Visual Replay Engine with variable speeds (0.5x, 1x, 2x, 4x)
  * - Deep State Resurrection for terminals with executed-command disclaimer
  * - 1-Click 5-second animated GIF exporter
- * - Instant OCR & title live filtering
+ * - Inbuilt Productivity & Activity Stats Dashboard (focus score, deep work, context switches, app distribution)
+ * - Multi-checkpoint snapshot manager & encrypted disaster recovery export/import
  * - Privacy-screened clipboard history
  */
 
@@ -28,11 +30,48 @@ const tmEventCount = document.querySelector('#tm-event-count')
 const tmCloseBtn = document.querySelector('#tm-close-btn')
 const tabTimeline = document.querySelector('#tab-timeline')
 const tabClipboard = document.querySelector('#tab-clipboard')
+const tabStats = document.querySelector('#tab-stats')
+const tabBackups = document.querySelector('#tab-backups')
 const clipCountBadge = document.querySelector('#clip-count-badge')
+const checkpointCountBadge = document.querySelector('#checkpoint-count-badge')
+
+// Content Panels
 const filmstripContainer = document.querySelector('#filmstrip-container')
 const filmstripTrack = document.querySelector('#filmstrip-track')
 const clipboardPanel = document.querySelector('#clipboard-panel')
 const clipboardList = document.querySelector('#clipboard-list')
+const statsPanel = document.querySelector('#stats-panel')
+const backupsPanel = document.querySelector('#backups-panel')
+
+// Video Replay Controls
+const videoPlayBtn = document.querySelector('#video-play-btn')
+const videoPlayIcon = document.querySelector('#video-play-icon')
+const videoPlayLabel = document.querySelector('#video-play-label')
+const videoStepBackBtn = document.querySelector('#video-step-back-btn')
+const videoStepFwdBtn = document.querySelector('#video-step-fwd-btn')
+const videoScrubberSlider = document.querySelector('#video-scrubber-slider')
+const videoTimeCounter = document.querySelector('#video-time-counter')
+const speedBtns = document.querySelectorAll('.speed-btn')
+
+// Stats Elements
+const statFocusScore = document.querySelector('#stat-focus-score')
+const statFocusDesc = document.querySelector('#stat-focus-desc')
+const statActiveTime = document.querySelector('#stat-active-time')
+const statDeepworkTime = document.querySelector('#stat-deepwork-time')
+const statSwitches = document.querySelector('#stat-switches')
+const statSwitchRate = document.querySelector('#stat-switch-rate')
+const statRescues = document.querySelector('#stat-rescues')
+const statRescueBreakdown = document.querySelector('#stat-rescue-breakdown')
+const statsAppsList = document.querySelector('#stats-apps-list')
+const statResetBtn = document.querySelector('#stat-reset-btn')
+
+// Checkpoint Elements
+const checkpointLabelInput = document.querySelector('#checkpoint-label-input')
+const createCheckpointBtn = document.querySelector('#create-checkpoint-btn')
+const exportBackupBtn = document.querySelector('#export-backup-btn')
+const checkpointsList = document.querySelector('#checkpoints-list')
+
+// Action Tools
 const presetBtns = document.querySelectorAll('.preset-btn')
 const toastContainer = document.querySelector('#toast-container')
 const soundToggleBtn = document.querySelector('#sound-toggle-btn')
@@ -49,6 +88,13 @@ let currentFilter = 'all'
 let currentSearch = ''
 let allEvents = []
 let allClipboards = []
+let allCheckpoints = []
+
+// Video Replay State
+let isPlaying = false
+let replayIndex = 0
+let playbackSpeed = 1
+let replayTimer = null
 
 // -----------------------------------------------------------------------------
 // Tactile Audio Synthesis (Zero-Asset Web Audio)
@@ -127,9 +173,6 @@ function showToast(msg, durationMs = 2400) {
   }, durationMs)
 }
 
-// -----------------------------------------------------------------------------
-// Relative Time Formatter
-// -----------------------------------------------------------------------------
 function timeAgo(ts) {
   if (!ts) return 'Just now'
   const elapsedSec = Math.max(0, Math.floor((Date.now() - ts) / 1000))
@@ -146,15 +189,30 @@ function isTerminalProcess(procName) {
   return /^(cmd|powershell|pwsh|windowsterminal|wt|bash|wsl)\.exe$/i.test(procName)
 }
 
+function escapeHtml(str) {
+  if (!str) return ''
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return '0m'
+  const totalSec = Math.floor(ms / 1000)
+  const hours = Math.floor(totalSec / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60)
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
+
 // -----------------------------------------------------------------------------
 // Filmstrip Rendering
 // -----------------------------------------------------------------------------
-function renderFilmstrip() {
-  filmstripTrack.innerHTML = ''
-
+function getFilteredEvents() {
   let filtered = allEvents
 
-  // Filter by search query
   if (currentSearch.trim()) {
     const q = currentSearch.toLowerCase()
     filtered = filtered.filter(
@@ -166,7 +224,6 @@ function renderFilmstrip() {
     )
   }
 
-  // Filter by preset
   if (currentFilter === 'recent') {
     const fifteenMinAgo = Date.now() - 15 * 60 * 1000
     filtered = filtered.filter((e) => e.timestamp >= fifteenMinAgo)
@@ -176,20 +233,34 @@ function renderFilmstrip() {
     filtered = filtered.filter((e) => isTerminalProcess(e.processName))
   }
 
+  return filtered
+}
+
+function renderFilmstrip() {
+  filmstripTrack.innerHTML = ''
+  const filtered = getFilteredEvents()
+
   tmEventCount.textContent = `${filtered.length} moment${filtered.length === 1 ? '' : 's'}`
 
   if (filtered.length === 0) {
     filmstripTrack.innerHTML = `
       <div style="color: var(--text-muted); font-size: 13px; padding: 40px; text-align: center; width: 100%;">
-        No moments found matching your search.
+        No moments found matching your criteria.
       </div>`
+    videoScrubberSlider.max = 0
+    videoScrubberSlider.value = 0
+    videoTimeCounter.textContent = '00:00 / 00:00'
     return
   }
 
-  filtered.forEach((event) => {
+  videoScrubberSlider.max = Math.max(0, filtered.length - 1)
+  updateScrubberTimeDisplay(filtered)
+
+  filtered.forEach((event, idx) => {
     const card = document.createElement('div')
     const isTerm = isTerminalProcess(event.processName)
     card.className = `tm-card kind-${event.kind === 'window-closed' ? 'closed' : 'focus'} ${isTerm ? 'is-terminal' : ''}`
+    card.dataset.index = idx
 
     const boundsStr = event.bounds
       ? `${event.bounds.width}×${event.bounds.height} @ (${event.bounds.x}, ${event.bounds.y})`
@@ -232,22 +303,284 @@ function renderFilmstrip() {
     `
 
     // Jump / Resurrect action
-    card.querySelector('.jump-btn').addEventListener('click', () => {
+    card.querySelector('.jump-btn').addEventListener('click', (e) => {
+      e.stopPropagation()
       playResurrectSound()
       showToast(`Resurrecting ${event.processName}...`)
       ipcRenderer.send('restore-moment', event)
     })
 
     // Copy Context action
-    card.querySelector('.copy-ctx-btn').addEventListener('click', () => {
+    card.querySelector('.copy-ctx-btn').addEventListener('click', (e) => {
+      e.stopPropagation()
       const textToCopy = `${event.processName} | ${event.title}\nExecutable: ${event.exePath || 'N/A'}`
       ipcRenderer.send('copy-to-clipboard', textToCopy)
       showToast('Copied window context!')
     })
 
+    card.addEventListener('click', () => {
+      seekToMomentIndex(idx)
+    })
+
     filmstripTrack.appendChild(card)
   })
+
+  highlightActiveCard()
 }
+
+// -----------------------------------------------------------------------------
+// Video & Visual Replay Engine
+// -----------------------------------------------------------------------------
+function updateScrubberTimeDisplay(eventsList) {
+  const currentNum = replayIndex + 1
+  const totalNum = eventsList.length
+  videoTimeCounter.textContent = `${String(currentNum).padStart(2, '0')} / ${String(totalNum).padStart(2, '0')} moments`
+  videoScrubberSlider.value = replayIndex
+}
+
+function seekToMomentIndex(idx) {
+  const events = getFilteredEvents()
+  if (events.length === 0) return
+  replayIndex = Math.max(0, Math.min(events.length - 1, idx))
+  updateScrubberTimeDisplay(events)
+  highlightActiveCard()
+  playTickSound()
+}
+
+function highlightActiveCard() {
+  const cards = filmstripTrack.querySelectorAll('.tm-card')
+  cards.forEach((c) => c.classList.remove('is-active-moment'))
+
+  const target = filmstripTrack.querySelector(`.tm-card[data-index="${replayIndex}"]`)
+  if (target) {
+    target.classList.add('is-active-moment')
+    target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  }
+}
+
+function startVideoPlayback() {
+  if (isPlaying) return
+  isPlaying = true
+  videoPlayIcon.textContent = '⏸'
+  videoPlayLabel.textContent = 'Pause'
+  videoPlayBtn.classList.add('is-playing')
+
+  const interval = Math.max(300, Math.floor(1800 / playbackSpeed))
+  replayTimer = setInterval(() => {
+    const events = getFilteredEvents()
+    if (events.length === 0) {
+      stopVideoPlayback()
+      return
+    }
+
+    if (replayIndex >= events.length - 1) {
+      // Reached the end, loop or pause
+      replayIndex = 0
+    } else {
+      replayIndex++
+    }
+
+    seekToMomentIndex(replayIndex)
+  }, interval)
+}
+
+function stopVideoPlayback() {
+  if (!isPlaying) return
+  isPlaying = false
+  if (replayTimer) clearInterval(replayTimer)
+  replayTimer = null
+  videoPlayIcon.textContent = '▶'
+  videoPlayLabel.textContent = 'Play'
+  videoPlayBtn.classList.remove('is-playing')
+}
+
+videoPlayBtn.addEventListener('click', () => {
+  if (isPlaying) stopVideoPlayback()
+  else startVideoPlayback()
+})
+
+videoStepBackBtn.addEventListener('click', () => {
+  stopVideoPlayback()
+  seekToMomentIndex(replayIndex - 1)
+})
+
+videoStepFwdBtn.addEventListener('click', () => {
+  stopVideoPlayback()
+  seekToMomentIndex(replayIndex + 1)
+})
+
+videoScrubberSlider.addEventListener('input', (e) => {
+  stopVideoPlayback()
+  seekToMomentIndex(parseInt(e.target.value, 10))
+})
+
+speedBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    speedBtns.forEach((b) => b.classList.remove('active'))
+    btn.classList.add('active')
+    playbackSpeed = parseFloat(btn.dataset.speed) || 1
+    if (isPlaying) {
+      stopVideoPlayback()
+      startVideoPlayback()
+    }
+    showToast(`Playback speed: ${playbackSpeed}x`)
+  })
+})
+
+// -----------------------------------------------------------------------------
+// Productivity & Activity Stats Rendering
+// -----------------------------------------------------------------------------
+function renderProductivityStats(data) {
+  if (!data) return
+
+  statFocusScore.textContent = data.focusScore ?? '--'
+  if (data.focusScore >= 80) {
+    statFocusDesc.textContent = '🔥 Excellent deep work focus!'
+  } else if (data.focusScore >= 60) {
+    statFocusDesc.textContent = '⚡ Balanced productive session'
+  } else {
+    statFocusDesc.textContent = '⚠️ High context-switching detected'
+  }
+
+  statActiveTime.textContent = formatDuration(data.totalActiveMs)
+  statDeepworkTime.textContent = `${data.deepWorkMinutes || 0}m deep focus blocks`
+
+  statSwitches.textContent = data.contextSwitches ?? 0
+  statSwitchRate.textContent = `${data.switchesPerHour ?? 0} switches / hr`
+
+  const rescues = data.rescues || { total: 0, undo: 0, terminal: 0, clipboard: 0 }
+  statRescues.textContent = rescues.total
+  statRescueBreakdown.textContent = `${rescues.undo} undos · ${rescues.terminal} shells · ${rescues.clipboard} clips`
+
+  // Render App Distribution Bars
+  statsAppsList.innerHTML = ''
+  if (!data.topApps || data.topApps.length === 0) {
+    statsAppsList.innerHTML = `<div style="color: var(--text-muted); font-size: 12px; padding: 12px 0;">No active app data tracked yet today.</div>`
+    return
+  }
+
+  data.topApps.forEach((app) => {
+    const row = document.createElement('div')
+    row.className = 'app-stat-row'
+    row.innerHTML = `
+      <div class="app-stat-header">
+        <span class="app-stat-name">
+          <span>${escapeHtml(app.processName)}</span>
+          <span class="app-stat-category ${app.category}">${app.category}</span>
+        </span>
+        <span class="app-stat-duration">${app.durationMinutes}m (${app.percentage}%)</span>
+      </div>
+      <div class="app-stat-bar-track">
+        <div class="app-stat-bar-fill ${app.category}" style="width: ${Math.max(4, app.percentage)}%;"></div>
+      </div>
+    `
+    statsAppsList.appendChild(row)
+  })
+}
+
+statResetBtn.addEventListener('click', () => {
+  ipcRenderer.send('reset-productivity-stats')
+  showToast('Productivity metrics reset for today')
+})
+
+ipcRenderer.on('productivity-stats-result', (_event, data) => {
+  renderProductivityStats(data)
+})
+
+// -----------------------------------------------------------------------------
+// Checkpoints & Disaster Recovery Rendering
+// -----------------------------------------------------------------------------
+function renderCheckpointsList(list) {
+  allCheckpoints = Array.isArray(list) ? list : []
+  checkpointCountBadge.textContent = allCheckpoints.length
+  checkpointsList.innerHTML = ''
+
+  if (allCheckpoints.length === 0) {
+    checkpointsList.innerHTML = `
+      <div style="color: var(--text-muted); font-size: 13px; padding: 30px; text-align: center;">
+        No checkpoints created yet. Save a milestone snapshot to restore from anytime.
+      </div>`
+    return
+  }
+
+  allCheckpoints.forEach((chk) => {
+    const card = document.createElement('div')
+    card.className = 'chk-card'
+    const dateStr = new Date(chk.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const sizeKb = chk.sizeBytes ? `${Math.round(chk.sizeBytes / 1024)} KB` : 'Snapshot'
+
+    card.innerHTML = `
+      <div class="chk-info">
+        <span class="chk-label">${escapeHtml(chk.label)}</span>
+        <span class="chk-meta">${dateStr} (${timeAgo(chk.timestamp)}) · ${chk.eventCount} moments · ${sizeKb}</span>
+      </div>
+      <div class="chk-actions">
+        <button class="chk-restore-btn" title="Restore session to this checkpoint">
+          <span>↶</span>
+          <span>Restore</span>
+        </button>
+        <button class="chk-del-btn" title="Delete checkpoint">✕</button>
+      </div>
+    `
+
+    card.querySelector('.chk-restore-btn').addEventListener('click', () => {
+      showToast(`Restoring checkpoint "${chk.label}"...`)
+      ipcRenderer.send('restore-checkpoint', chk.id)
+    })
+
+    card.querySelector('.chk-del-btn').addEventListener('click', () => {
+      ipcRenderer.send('delete-checkpoint', chk.id)
+      showToast(`Deleted checkpoint`)
+    })
+
+    checkpointsList.appendChild(card)
+  })
+}
+
+createCheckpointBtn.addEventListener('click', () => {
+  const label = checkpointLabelInput.value.trim() || 'Manual Checkpoint'
+  ipcRenderer.send('create-checkpoint', label)
+  checkpointLabelInput.value = ''
+})
+
+exportBackupBtn.addEventListener('click', () => {
+  showToast('Exporting encrypted backup bundle...')
+  ipcRenderer.send('export-backup-bundle')
+})
+
+ipcRenderer.on('checkpoint-created-result', (_event, res) => {
+  if (res?.success) {
+    showToast(`Saved checkpoint: "${res.checkpoint?.label}"`)
+    renderCheckpointsList(res.checkpoints)
+  } else {
+    showToast(`Error creating checkpoint: ${res?.error}`)
+  }
+})
+
+ipcRenderer.on('checkpoints-list-result', (_event, list) => {
+  renderCheckpointsList(list)
+})
+
+ipcRenderer.on('restore-checkpoint-result', (_event, res) => {
+  if (res?.success) {
+    playResurrectSound()
+    showToast(`Restored ${res.eventCount} moments from checkpoint!`)
+  } else {
+    showToast(`Failed to restore checkpoint: ${res?.error}`)
+  }
+})
+
+ipcRenderer.on('delete-checkpoint-result', (_event, res) => {
+  renderCheckpointsList(res.checkpoints)
+})
+
+ipcRenderer.on('export-backup-bundle-result', (_event, res) => {
+  if (res?.success) {
+    showToast(`Exported .rewind.backup with ${res.checkpointCount} checkpoints to Downloads!`)
+  } else {
+    showToast(`Export failed: ${res?.error}`)
+  }
+})
 
 // -----------------------------------------------------------------------------
 // Clipboard Panel Rendering
@@ -291,17 +624,8 @@ function renderClipboardList() {
   })
 }
 
-function escapeHtml(str) {
-  if (!str) return ''
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
 // -----------------------------------------------------------------------------
-// Time Machine Expand / Collapse Toggle
+// Time Machine Expand / Collapse & Tab Switching
 // -----------------------------------------------------------------------------
 function setTimeMachineVisible(expanded) {
   isExpanded = expanded
@@ -310,8 +634,11 @@ function setTimeMachineVisible(expanded) {
     timelineToggleBtn.classList.add('active')
     renderFilmstrip()
     renderClipboardList()
+    ipcRenderer.send('get-productivity-stats')
+    ipcRenderer.send('get-checkpoints')
     setTimeout(() => tmSearchInput.focus(), 100)
   } else {
+    stopVideoPlayback()
     tmView.classList.add('hidden')
     timelineToggleBtn.classList.remove('active')
     tmSearchInput.value = ''
@@ -319,9 +646,6 @@ function setTimeMachineVisible(expanded) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Event Listeners
-// -----------------------------------------------------------------------------
 timelineToggleBtn.addEventListener('click', () => {
   ipcRenderer.send('toggle-time-machine')
 })
@@ -330,21 +654,36 @@ tmCloseBtn.addEventListener('click', () => {
   ipcRenderer.send('toggle-time-machine')
 })
 
-// Tab Navigation
-tabTimeline.addEventListener('click', () => {
-  tabTimeline.classList.add('active')
-  tabClipboard.classList.remove('active')
-  filmstripContainer.classList.remove('hidden')
-  clipboardPanel.classList.add('hidden')
-})
+function switchTab(targetTab) {
+  const tabs = [tabTimeline, tabClipboard, tabStats, tabBackups]
+  const panels = [filmstripContainer, clipboardPanel, statsPanel, backupsPanel]
 
-tabClipboard.addEventListener('click', () => {
-  tabClipboard.classList.add('active')
-  tabTimeline.classList.remove('active')
-  filmstripContainer.classList.add('hidden')
-  clipboardPanel.classList.remove('hidden')
-  renderClipboardList()
-})
+  tabs.forEach((t) => t.classList.remove('active'))
+  panels.forEach((p) => p.classList.add('hidden'))
+
+  if (targetTab === 'timeline') {
+    tabTimeline.classList.add('active')
+    filmstripContainer.classList.remove('hidden')
+    renderFilmstrip()
+  } else if (targetTab === 'clipboard') {
+    tabClipboard.classList.add('active')
+    clipboardPanel.classList.remove('hidden')
+    renderClipboardList()
+  } else if (targetTab === 'stats') {
+    tabStats.classList.add('active')
+    statsPanel.classList.remove('hidden')
+    ipcRenderer.send('get-productivity-stats')
+  } else if (targetTab === 'backups') {
+    tabBackups.classList.add('active')
+    backupsPanel.classList.remove('hidden')
+    ipcRenderer.send('get-checkpoints')
+  }
+}
+
+tabTimeline.addEventListener('click', () => switchTab('timeline'))
+tabClipboard.addEventListener('click', () => switchTab('clipboard'))
+tabStats.addEventListener('click', () => switchTab('stats'))
+tabBackups.addEventListener('click', () => switchTab('backups'))
 
 // Live search input filtering
 tmSearchInput.addEventListener('input', (e) => {
@@ -425,9 +764,14 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault()
     tmSearchInput.focus()
   } else if (isExpanded && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    stopVideoPlayback()
     playTickSound()
-    const scrollDelta = e.key === 'ArrowRight' ? 260 : -260
-    filmstripContainer.scrollBy({ left: scrollDelta, behavior: 'smooth' })
+    if (e.key === 'ArrowRight') seekToMomentIndex(replayIndex + 1)
+    else seekToMomentIndex(replayIndex - 1)
+  } else if (isExpanded && e.code === 'Space' && document.activeElement !== tmSearchInput && document.activeElement !== checkpointLabelInput) {
+    e.preventDefault()
+    if (isPlaying) stopVideoPlayback()
+    else startVideoPlayback()
   }
 })
 
@@ -459,7 +803,6 @@ ipcRenderer.on('new-clipboard-item', (_event, item) => {
 ipcRenderer.on('restore-moment-result', (_event, res) => {
   if (res?.success) {
     showToast(`Successfully ${res.action || 'restored'}!`)
-    // If disclaimer is present (terminal recovery), show notification banner
     if (res.disclaimer) {
       terminalDisclaimerBanner.classList.remove('hidden')
     }

@@ -44,8 +44,10 @@
       <div class="tm-header">
         <div class="tm-brand">
           <span class="hud-brand-mark">R</span>
-          <span class="tm-title">REWIND TIME MACHINE</span>
-          <span class="tm-badge" id="tm-event-count">0 moments</span>
+          <div class="tm-title-group">
+            <span class="tm-title">REWIND TIME MACHINE</span>
+            <span class="tm-sub-badge" id="tm-event-count">0 moments</span>
+          </div>
         </div>
 
         <div class="tm-search-box">
@@ -54,7 +56,7 @@
             type="text"
             id="tm-search-input"
             class="tm-search-input"
-            placeholder="Search windows, errors, commands, titles... (Ctrl+K)"
+            placeholder="Search apps, titles, commands, text... (Ctrl+K)"
             autocomplete="off"
             spellcheck="false"
           />
@@ -62,14 +64,23 @@
         </div>
 
         <div class="tm-nav-tabs">
-          <button id="tab-timeline" class="tm-tab active">
+          <button id="tab-timeline" class="tm-tab active" title="Visual moment filmstrip and video replay">
             <span class="icon">⏱</span>
-            <span>Timeline</span>
+            <span>Replay</span>
           </button>
-          <button id="tab-clipboard" class="tm-tab">
+          <button id="tab-clipboard" class="tm-tab" title="Privacy-filtered clipboard timeline">
             <span class="icon">📋</span>
             <span>Clipboard</span>
             <span class="tab-badge" id="clip-count-badge">0</span>
+          </button>
+          <button id="tab-stats" class="tm-tab" title="Inbuilt productivity and focus analytics">
+            <span class="icon">📊</span>
+            <span>Stats</span>
+          </button>
+          <button id="tab-backups" class="tm-tab" title="Multi-checkpoint snapshots and disaster recovery">
+            <span class="icon">💾</span>
+            <span>Checkpoints</span>
+            <span class="tab-badge" id="checkpoint-count-badge">0</span>
           </button>
         </div>
 
@@ -93,21 +104,110 @@
           <button class="preset-btn" data-filter="closed">Closed Apps</button>
           <button class="preset-btn" data-filter="terminals">⚡ Terminals</button>
         </div>
-        <div class="tm-hint">Scroll horizontally or use ← / → to scrub history with tactile audio</div>
+
+        <!-- Video Player Replay Controls -->
+        <div class="video-replay-bar" id="video-replay-bar">
+          <button id="video-play-btn" class="video-ctrl-btn play-btn" title="Play / Pause Replay">
+            <span id="video-play-icon">▶</span>
+            <span id="video-play-label">Play</span>
+          </button>
+          <button id="video-step-back-btn" class="video-ctrl-btn" title="Step Back 1 Moment (←)">⏮</button>
+          <button id="video-step-fwd-btn" class="video-ctrl-btn" title="Step Forward 1 Moment (→)">⏭</button>
+
+          <div class="video-scrubber-track-wrap">
+            <input type="range" id="video-scrubber-slider" class="video-scrubber-slider" min="0" max="100" value="0" />
+            <div class="video-scrubber-progress" id="video-scrubber-progress"></div>
+          </div>
+
+          <span class="video-time-counter" id="video-time-counter">00:00 / 00:00</span>
+
+          <div class="video-speed-group">
+            <button class="speed-btn active" data-speed="1">1x</button>
+            <button class="speed-btn" data-speed="2">2x</button>
+            <button class="speed-btn" data-speed="4">4x</button>
+          </div>
+        </div>
       </div>
 
-      <!-- Main Horizontal Filmstrip Section -->
+      <!-- Main Content Area -->
       <div class="tm-content-area" id="tm-content-area">
+        <!-- Filmstrip Section -->
         <div class="filmstrip-container" id="filmstrip-container">
           <div class="filmstrip-track" id="filmstrip-track">
             <!-- Dynamically populated cards -->
           </div>
         </div>
 
-        <!-- Clipboard History Panel (hidden by default) -->
+        <!-- Clipboard History Panel -->
         <div class="clipboard-panel hidden" id="clipboard-panel">
           <div class="clipboard-list" id="clipboard-list">
             <!-- Dynamically populated clipboard snippets -->
+          </div>
+        </div>
+
+        <!-- Productivity & Activity Stats Panel -->
+        <div class="stats-panel hidden" id="stats-panel">
+          <div class="stats-grid">
+            <div class="stat-card score-card">
+              <div class="stat-card-title">Focus & Deep Work Score</div>
+              <div class="score-display">
+                <span class="score-value" id="stat-focus-score">--</span>
+                <span class="score-unit">/100</span>
+              </div>
+              <div class="stat-card-sub" id="stat-focus-desc">Analyzing work session...</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-card-title">Active Time Tracked</div>
+              <div class="stat-number" id="stat-active-time">0h 0m</div>
+              <div class="stat-card-sub" id="stat-deepwork-time">0m deep work</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-card-title">Context Switches</div>
+              <div class="stat-number" id="stat-switches">0</div>
+              <div class="stat-card-sub" id="stat-switch-rate">0.0 / hr</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-card-title">Total Rescues</div>
+              <div class="stat-number stat-highlight" id="stat-rescues">0</div>
+              <div class="stat-card-sub" id="stat-rescue-breakdown">0 undos · 0 shells · 0 clips</div>
+            </div>
+          </div>
+
+          <div class="stats-section-title">
+            <span>Application Focus Time Distribution</span>
+            <button id="stat-reset-btn" class="stat-reset-btn" title="Reset collected productivity metrics">Reset Today's Stats</button>
+          </div>
+          <div class="stats-apps-list" id="stats-apps-list">
+            <!-- Dynamically populated visual app percentage bars -->
+          </div>
+        </div>
+
+        <!-- Checkpoints & Disaster Recovery Panel -->
+        <div class="backups-panel hidden" id="backups-panel">
+          <div class="backups-header-bar">
+            <div class="checkpoint-create-form">
+              <input
+                type="text"
+                id="checkpoint-label-input"
+                class="checkpoint-input"
+                placeholder="Name this milestone (e.g. Pre-Deployment, Client Review)..."
+              />
+              <button id="create-checkpoint-btn" class="create-checkpoint-btn">
+                <span>💾</span>
+                <span>Save Checkpoint</span>
+              </button>
+            </div>
+            <button id="export-backup-btn" class="export-backup-btn" title="Export encrypted backup archive">
+              <span>📥</span>
+              <span>Export .rewind.backup</span>
+            </button>
+          </div>
+
+          <div class="checkpoints-list" id="checkpoints-list">
+            <!-- Dynamically populated checkpoint cards -->
           </div>
         </div>
       </div>

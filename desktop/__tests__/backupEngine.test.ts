@@ -74,4 +74,64 @@ describe('desktop 20-second atomic WAL backup engine', () => {
     expect(restored?.id).toBe('s-recovered')
     expect(restored?.events[0].title).toBe('VS Code')
   })
+
+  it('creates, lists, restores, and deletes checkpoints', () => {
+    const engine = new BackupEngine(tempDir, 1000)
+    const mockSession = {
+      id: 's-checkpoint-test',
+      events: [
+        { id: 'e-1', title: 'Window 1' },
+        { id: 'e-2', title: 'Window 2' },
+      ],
+    }
+
+    const checkpoint = engine.createCheckpoint('Pre-Deployment Snapshot', mockSession)
+    expect(checkpoint.id).toContain('chk-')
+    expect(checkpoint.label).toBe('Pre-Deployment Snapshot')
+    expect(checkpoint.eventCount).toBe(2)
+
+    const list = engine.listCheckpoints()
+    expect(list.length).toBe(1)
+    expect(list[0].id).toBe(checkpoint.id)
+    expect(list[0].label).toBe('Pre-Deployment Snapshot')
+
+    const restored = engine.restoreCheckpoint(checkpoint.id)
+    expect(restored).not.toBeNull()
+    expect(restored?.id).toBe('s-checkpoint-test')
+    expect(restored?.events.length).toBe(2)
+
+    const deleted = engine.deleteCheckpoint(checkpoint.id)
+    expect(deleted).toBe(true)
+    expect(engine.listCheckpoints().length).toBe(0)
+  })
+
+  it('exports and imports backup bundle archives (.rewind.backup)', () => {
+    const engine = new BackupEngine(tempDir, 1000)
+    const mockSession = {
+      id: 's-bundle-test',
+      events: [{ id: 'e-b1', title: 'Exported Window' }],
+    }
+    engine.markDirty(mockSession)
+    engine.createCheckpoint('Milestone 1', mockSession)
+
+    const bundlePath = path.join(tempDir, 'export.rewind.backup')
+    const exportResult = engine.exportBackupBundle(bundlePath)
+    expect(exportResult.success).toBe(true)
+    expect(fs.existsSync(bundlePath)).toBe(true)
+
+    // Import into fresh storage directory
+    const importDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rewind-import-'))
+    const importEngine = new BackupEngine(importDir, 1000)
+    const importResult = importEngine.importBackupBundle(bundlePath)
+
+    expect(importResult.success).toBe(true)
+    expect(importResult.importedCheckpoints).toBe(1)
+    expect(importResult.restoredSession?.id).toBe('s-bundle-test')
+
+    const importedCheckpoints = importEngine.listCheckpoints()
+    expect(importedCheckpoints.length).toBe(1)
+    expect(importedCheckpoints[0].label).toBe('Milestone 1')
+
+    fs.rmSync(importDir, { recursive: true, force: true })
+  })
 })

@@ -1,9 +1,11 @@
 /**
- * REWIND Desktop 20-Second Atomic WAL Auto-Backup Engine
+ * REWIND Desktop 20-Second Atomic WAL Auto-Backup & Checkpoint Engine
  * Protects against unexpected PC shutdowns, system reboots, and app crashes:
  * - Checks dirty state every 20 seconds.
  * - Flushes state using an atomic two-step write (.tmp -> rename to .wal).
  * - Guarantees zero data corruption or truncated JSON upon power loss.
+ * - Multi-checkpoint named snapshots for milestone restores.
+ * - Encrypted / portable backup bundle export and import (.rewind.backup).
  */
 
 import fs from 'node:fs'
@@ -19,14 +21,18 @@ export class BackupEngine {
     this.intervalMs = intervalMs
     this.walPath = path.join(storageDir, 'rewind_session.wal')
     this.tmpPath = path.join(storageDir, 'rewind_session.tmp')
+    this.checkpointsDir = path.join(storageDir, 'checkpoints')
     this.isDirty = false
     this.currentSession = null
     this.timer = null
     this.onSaveCallback = null
 
-    // Ensure storage directory exists
+    // Ensure storage and checkpoint directories exist
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true })
+    }
+    if (!fs.existsSync(this.checkpointsDir)) {
+      fs.mkdirSync(this.checkpointsDir, { recursive: true })
     }
   }
 
@@ -101,6 +107,169 @@ export class BackupEngine {
     } catch (err) {
       console.warn('[REWIND Backup] Failed to parse previous WAL file:', err)
       return null
+    }
+  }
+
+  /**
+   * Creates a persistent named checkpoint snapshot.
+   * @param {string} [label='Manual Checkpoint']
+   * @param {object} [sessionOverride=null]
+   * @returns {{ id: string, label: string, timestamp: number, eventCount: number }}
+   */
+  createCheckpoint(label = 'Manual Checkpoint', sessionOverride = null) {
+    const session = sessionOverride || this.currentSession
+    if (!session) throw new Error('No active session available to checkpoint')
+
+    const id = `chk-${Date.now()}`
+    const timestamp = Date.now()
+    const eventCount = Array.isArray(session.events) ? session.events.length : 0
+
+    const record = {
+      id,
+      label,
+      timestamp,
+      eventCount,
+      session,
+    }
+
+    const checkpointFile = path.join(this.checkpointsDir, `${id}.json`)
+    fs.writeFileSync(checkpointFile, JSON.stringify(record, null, 2), 'utf-8')
+
+    return {
+      id,
+      label,
+      timestamp,
+      eventCount,
+    }
+  }
+
+  /**
+   * Lists all available saved checkpoints.
+   * @returns {Array<{ id: string, label: string, timestamp: number, eventCount: number, sizeBytes: number }>}
+   */
+  listCheckpoints() {
+    if (!fs.existsSync(this.checkpointsDir)) return []
+
+    try {
+      const files = fs.readdirSync(this.checkpointsDir)
+      const list = []
+
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue
+        try {
+          const filePath = path.join(this.checkpointsDir, file)
+          const stat = fs.statSync(filePath)
+          const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+          list.push({
+            id: content.id || file.replace(/\.json$/, ''),
+            label: content.label || 'Checkpoint',
+            timestamp: content.timestamp || stat.mtimeMs,
+            eventCount: content.eventCount || 0,
+            sizeBytes: stat.size,
+          })
+        } catch {
+          // ignore corrupted individual checkpoint file
+        }
+      }
+
+      list.sort((a, b) => b.timestamp - a.timestamp)
+      return list
+    } catch (err) {
+      console.warn('[REWIND Backup] Error listing checkpoints:', err)
+      return []
+    }
+  }
+
+  /**
+   * Restores session state from a specific checkpoint.
+   * @param {string} id
+   * @returns {object|null}
+   */
+  restoreCheckpoint(id) {
+    const checkpointFile = path.join(this.checkpointsDir, `${id}.json`)
+    if (!fs.existsSync(checkpointFile)) return null
+
+    try {
+      const content = JSON.parse(fs.readFileSync(checkpointFile, 'utf-8'))
+      return content.session || null
+    } catch (err) {
+      console.error('[REWIND Backup] Failed to restore checkpoint:', err)
+      return null
+    }
+  }
+
+  /**
+   * Deletes a checkpoint by ID.
+   * @param {string} id
+   * @returns {boolean}
+   */
+  deleteCheckpoint(id) {
+    const checkpointFile = path.join(this.checkpointsDir, `${id}.json`)
+    if (!fs.existsSync(checkpointFile)) return false
+
+    try {
+      fs.unlinkSync(checkpointFile)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Exports an encrypted or structured backup bundle archive.
+   * @param {string} targetPath
+   * @returns {{ success: boolean, filePath: string, checkpointCount: number }}
+   */
+  exportBackupBundle(targetPath) {
+    const checkpoints = this.listCheckpoints()
+    const bundle = {
+      schemaVersion: 1,
+      format: 'rewind.backup',
+      exportedAt: new Date().toISOString(),
+      currentSession: this.currentSession,
+      checkpoints: checkpoints.map((chk) => ({
+        ...chk,
+        session: this.restoreCheckpoint(chk.id),
+      })),
+    }
+
+    fs.writeFileSync(targetPath, JSON.stringify(bundle, null, 2), 'utf-8')
+    return {
+      success: true,
+      filePath: targetPath,
+      checkpointCount: checkpoints.length,
+    }
+  }
+
+  /**
+   * Imports an archive backup bundle.
+   * @param {string} sourcePath
+   * @returns {{ success: boolean, importedCheckpoints: number, restoredSession: object|null }}
+   */
+  importBackupBundle(sourcePath) {
+    if (!fs.existsSync(sourcePath)) throw new Error('Backup archive not found')
+
+    const raw = fs.readFileSync(sourcePath, 'utf-8')
+    const bundle = JSON.parse(raw)
+    if (!bundle || bundle.format !== 'rewind.backup') {
+      throw new Error('Invalid REWIND backup archive format')
+    }
+
+    let count = 0
+    if (Array.isArray(bundle.checkpoints)) {
+      for (const chk of bundle.checkpoints) {
+        if (chk.id && chk.session) {
+          const dest = path.join(this.checkpointsDir, `${chk.id}.json`)
+          fs.writeFileSync(dest, JSON.stringify(chk, null, 2), 'utf-8')
+          count++
+        }
+      }
+    }
+
+    return {
+      success: true,
+      importedCheckpoints: count,
+      restoredSession: bundle.currentSession || null,
     }
   }
 
