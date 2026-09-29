@@ -1,7 +1,7 @@
 /**
  * REWIND Desktop Ultimate - System-Wide Always-On-Top Time Machine Core
  * Features:
- * - Floating HUD pill (480x46) expandable to full Time Machine dashboard (960x520).
+ * - Floating HUD pill (480x46) expandable to full Time Machine dashboard (1100x520).
  * - Global hotkey (Ctrl+Alt+Z) to toggle Time Machine from any app.
  * - Window lifecycle tracking & close recording with full state (CMD scrollback, history, cwd).
  * - Multi-tier point-in-time resurrection with executed-command disclaimer.
@@ -12,15 +12,16 @@
  * - 20-second atomic WAL auto-backup engine with crash recovery.
  */
 
-import { app, BrowserWindow, ipcMain, screen, globalShortcut, clipboard } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, globalShortcut, clipboard, safeStorage } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { initWin32, getActiveWindow, sendCtrlZ } from './win32.js'
+import { initWin32, getActiveWindow, sendCtrlZ, isWindowAlive } from './win32.js'
 import { UndoEngine } from './undoEngine.js'
 import { BackupEngine } from './backupEngine.js'
 import { ClipboardEngine } from './clipboardEngine.js'
 import { isWindowAllowed, sanitizeWindowTitle } from './security.js'
-import { StateCaptureEngine } from './stateCapture.js'
+import { StateCaptureEngine, setStorageKeyProvider } from './stateCapture.js'
+import { createKeyProvider } from './keyStore.js'
 import { GifExporter } from './gifExporter.js'
 import { OcrEngine } from './ocrEngine.js'
 import { GameAndBatteryGuard } from './gameGuard.js'
@@ -61,13 +62,17 @@ function createOverlayHUD() {
     resizable: false,
     hasShadow: false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      preload: path.join(__dirname, 'preload.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
     },
   })
 
   // Keep HUD hovering over all software windows
   hudWindow.setAlwaysOnTop(true, 'screen-saver')
+  hudWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  hudWindow.webContents.on('will-navigate', (e) => e.preventDefault())
   hudWindow.loadFile(path.join(__dirname, 'overlay', 'index.html'))
 
   hudWindow.on('closed', () => {
@@ -83,7 +88,7 @@ function setOverlayExpanded(expand) {
   isTimeMachineExpanded = expand
 
   if (expand) {
-    const expandedWidth = Math.min(980, width - 40)
+    const expandedWidth = Math.min(1100, width - 40)
     const expandedHeight = 520
     const x = Math.round((width - expandedWidth) / 2)
     hudWindow.setBounds({ x, y: 20, width: expandedWidth, height: expandedHeight }, true)
@@ -136,7 +141,7 @@ function startWindowMonitor() {
         const sanitizedTitle = sanitizeWindowTitle(current.title)
 
         // If the previous window closed/switched, record closure with full state if applicable
-        if (lastActiveWindow && lastActiveWindow.hwnd !== current.hwnd) {
+        if (lastActiveWindow && lastActiveWindow.hwnd !== current.hwnd && !isWindowAlive(lastActiveWindow.hwnd)) {
           const isTerm = StateCaptureEngine.isTerminal(lastActiveWindow.processName)
           let stateSummary = null
           let statePayload = null
@@ -148,8 +153,8 @@ function startWindowMonitor() {
               title: lastActiveWindow.title,
               bounds: lastActiveWindow.bounds,
               cwd: process.env.USERPROFILE || 'C:\\',
-              buffer: isTerm ? `[Previous Session in ${lastActiveWindow.processName}]` : '',
-              history: isTerm ? ['dir', 'git status'] : [],
+              buffer: '',
+              history: [],
             })
             stateSummary = captured.summary
             statePayload = captured
@@ -224,6 +229,7 @@ function startWindowMonitor() {
 
 app.whenReady().then(() => {
   initWin32()
+  setStorageKeyProvider(createKeyProvider({ safeStorage, dir: app.getPath('userData') }))
 
   // Initialize 20-second atomic WAL auto-backup
   const storageDir = path.join(app.getPath('userData'), 'rewind_backups')
@@ -312,7 +318,13 @@ app.whenReady().then(() => {
   })
 
   // IPC listener for Restoring a past moment / Deep State Resurrection
-  ipcMain.on('restore-moment', async (event, eventSnapshot) => {
+  ipcMain.on('restore-moment', async (event, requested) => {
+    // Never act on renderer-supplied payloads: resolve the moment from our own timeline by id.
+    const eventSnapshot = currentSession.events.find((e) => e.id === requested?.id)
+    if (!eventSnapshot) {
+      event.reply('restore-moment-result', { success: false, error: 'Unknown moment' })
+      return
+    }
     // If full state payload is available, use StateCaptureEngine with disclaimer
     if (eventSnapshot?.statePayload) {
       const result = await StateCaptureEngine.resurrectState(eventSnapshot.statePayload)

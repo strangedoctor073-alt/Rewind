@@ -10,6 +10,23 @@
 import path from 'node:path'
 import koffi from 'koffi'
 
+/**
+ * Strips everything from the first NUL character onward, then trims whitespace.
+ * A correctly-sized native string should never contain an embedded NUL, so this
+ * is a no-op in the normal case. It guards against QueryFullProcessImageNameW
+ * (and similar fixed-buffer Win32 calls) reporting a written length that is
+ * larger than what was actually written, which otherwise leaves junk/NUL
+ * padding on the end of the string and silently breaks fs.existsSync() checks
+ * against it later.
+ * @param {string} raw
+ * @returns {string}
+ */
+export function sanitizeNativeString(raw) {
+  if (!raw) return ''
+  const nulIndex = raw.indexOf('\0')
+  return (nulIndex === -1 ? raw : raw.slice(0, nulIndex)).trim()
+}
+
 let isInitialized = false
 let user32 = null
 let kernel32 = null
@@ -22,6 +39,7 @@ let GetWindowRect = null
 let SetForegroundWindow = null
 let SetWindowPos = null
 let keybd_event = null
+let IsWindow = null
 let OpenProcess = null
 let QueryFullProcessImageNameW = null
 let CloseHandle = null
@@ -59,6 +77,7 @@ export function initWin32() {
       'int',
       'uint32',
     ])
+    IsWindow = user32.func('IsWindow', 'bool', ['intptr'])
     keybd_event = user32.func('keybd_event', 'void', ['uint8', 'uint8', 'uint32', 'uintptr'])
 
     // PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -112,7 +131,7 @@ export function getWindowProcessInfo(hwnd) {
       const pathBuf = new Uint16Array(1024)
       const sizeBuf = [1024]
       if (QueryFullProcessImageNameW(hProcess, 0, pathBuf, sizeBuf)) {
-        exePath = String.fromCharCode(...pathBuf.slice(0, sizeBuf[0])).trim()
+        exePath = sanitizeNativeString(String.fromCharCode(...pathBuf.slice(0, sizeBuf[0])))
       }
       CloseHandle(hProcess)
     }
@@ -232,6 +251,7 @@ export function _setWin32BindingsForTesting(mocks = {}) {
   if (mocks.GetForegroundWindow !== undefined) GetForegroundWindow = mocks.GetForegroundWindow;
   if (mocks.SetForegroundWindow !== undefined) SetForegroundWindow = mocks.SetForegroundWindow;
   if (mocks.keybd_event !== undefined) keybd_event = mocks.keybd_event;
+  if (mocks.IsWindow !== undefined) IsWindow = mocks.IsWindow;
   if (mocks.isInitialized !== undefined) isInitialized = mocks.isInitialized;
 }
 
@@ -252,6 +272,19 @@ export function restoreWindowPosition(hwnd, bounds) {
       bounds.height,
       SWP_NOZORDER | SWP_SHOWWINDOW
     )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * True while the HWND still refers to an existing window.
+ * Returns false when Win32 is unavailable so callers keep the conservative path.
+ */
+export function isWindowAlive(hwnd) {
+  if (!isInitialized || !hwnd || !IsWindow) return false
+  try {
+    return !!IsWindow(hwnd)
   } catch {
     return false
   }

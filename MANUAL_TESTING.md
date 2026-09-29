@@ -145,3 +145,21 @@ than crashing.
 6. Stop recording, then try Undo again on the now-stopped session. Expect: it still
    works — undo/redo isn't limited to the moment you're actively recording, it applies
    to whichever session is currently loaded.
+
+## Part 3 — Desktop Time Machine (Windows only)
+
+Run on a real Windows 10/11 machine after touching `desktop/`. Unit tests mock Win32, so this is the only check of the native behaviour.
+
+1. `npm run desktop`. The floating pill appears at the top centre of the primary display.
+2. Press **Ctrl+Alt+Z**. The dashboard opens at about 1100 px wide. Check the header: brand, search box, tabs and tool buttons sit in one row with no overlap, and the search field is wide enough to type in.
+3. Resize your display scaling (100% / 125% / 150%) and reopen. The header must not overlap at any setting.
+4. Press **Ctrl+K**: the search field takes focus. Type a process name; the filmstrip filters.
+5. Switch between two apps. A *focus* card appears for each; no *Closed* card appears while both windows are still open.
+6. Close a Notepad window. A *Closed* card appears. **Jump Here** relaunches it and restores its position.
+7. Open a terminal, switch away and close it. **Resurrect Shell** reopens the shell in your home folder.
+8. Copy some text, then copy something else. The Clipboard tab lists both.
+9. Focus Notepad, click **Undo** on the pill: the last edit is undone in Notepad, not in another window.
+10. Open a password manager or a private/incognito window: no card is created for it.
+11. Save a checkpoint, restart the app, restore the checkpoint.
+12. Press **Esc** or **Ctrl+Alt+Z**: the dashboard closes.
+

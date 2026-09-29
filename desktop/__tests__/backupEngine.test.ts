@@ -134,4 +134,37 @@ describe('desktop 20-second atomic WAL backup engine', () => {
 
     fs.rmSync(importDir, { recursive: true, force: true })
   })
+
+  it('rejects checkpoint ids that try to escape the checkpoints directory', () => {
+    const engine = new BackupEngine(tempDir, 1000)
+    const outside = path.join(tempDir, 'victim.json')
+    fs.writeFileSync(outside, JSON.stringify({ session: { id: 'secret' } }))
+
+    expect(engine.checkpointPath('../victim')).toBeNull()
+    expect(engine.checkpointPath('chk-1/../../victim')).toBeNull()
+    expect(engine.restoreCheckpoint('../victim')).toBeNull()
+    expect(engine.deleteCheckpoint('../victim')).toBe(false)
+    expect(fs.existsSync(outside)).toBe(true)
+  })
+
+  it('skips malicious checkpoint ids when importing a backup bundle', () => {
+    const engine = new BackupEngine(tempDir, 1000)
+    const bundlePath = path.join(tempDir, 'evil.rewind.backup')
+    fs.writeFileSync(
+      bundlePath,
+      JSON.stringify({
+        format: 'rewind.backup',
+        checkpoints: [
+          { id: '../../pwned', session: { id: 'x', events: [] } },
+          { id: 'chk-123', session: { id: 'ok', events: [] } },
+        ],
+      }),
+    )
+
+    const result = engine.importBackupBundle(bundlePath)
+    expect(result.importedCheckpoints).toBe(1)
+    expect(fs.existsSync(path.join(tempDir, '..', 'pwned.json'))).toBe(false)
+    expect(engine.restoreCheckpoint('chk-123')).toMatchObject({ id: 'ok' })
+  })
 })
+

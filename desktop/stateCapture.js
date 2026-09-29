@@ -1,7 +1,7 @@
 /**
  * REWIND Desktop Full-State Capture & Smart Resurrection Engine
  * Captures deep application state (terminal scrollback, command history, working directory, window geometry)
- * with gzip compression, DPAPI-compatible encryption, and 5 MiB safety limits.
+ * with gzip compression, AES-256-GCM encryption (key protected by the OS secure store), and 5 MiB safety limits.
  */
 
 import zlib from 'node:zlib'
@@ -32,12 +32,32 @@ export const TERMINAL_PROCESSES = new Set([
 export const TERMINAL_DISCLAIMER =
   'Note: Prior terminal output, environment, and command history have been restored. Commands already executed on your machine cannot be rolled back.'
 
+let keyProvider = null
+let warnedLegacyKey = false
+
 /**
- * Derives a consistent local machine/user key for DPAPI-grade encryption.
+ * Installs the per-install key provider (see keyStore.js).
+ * @param {(() => Buffer | null) | null} provider
+ */
+export function setStorageKeyProvider(provider) {
+  keyProvider = typeof provider === 'function' ? provider : null
+}
+
+/**
+ * Returns the AES key. Prefers the OS-protected random key. The fallback is a
+ * username-derived key: it is obfuscation only, NOT secret, and is used solely
+ * when the OS secure store is unavailable (and in unit tests).
  */
 function getStorageKey() {
+  const provided = keyProvider?.()
+  if (provided) return provided
+
+  if (keyProvider && !warnedLegacyKey) {
+    warnedLegacyKey = true
+    console.warn('[REWIND] OS secure storage unavailable; state blobs use a weak fallback key.')
+  }
   const user = process.env.USERNAME || process.env.USER || 'rewind_local_user'
-  return crypto.createHash('sha256').update(`rewind_dpapi_salt_${user}`).digest()
+  return crypto.createHash('sha256').update(`rewind_fallback_key_${user}`).digest()
 }
 
 /**

@@ -3,6 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'none'"
+    />
     <link rel="stylesheet" href="hud.css" />
     <title>REWIND Time Machine</title>
   </head>
@@ -56,30 +60,30 @@
             type="text"
             id="tm-search-input"
             class="tm-search-input"
-            placeholder="Search apps, titles, commands, text... (Ctrl+K)"
+            placeholder="Search apps, titles, commands…"
             autocomplete="off"
             spellcheck="false"
           />
-          <kbd class="kbd-hint">Ctrl+Alt+Z / Esc</kbd>
+          <kbd class="kbd-hint" title="Focus search (Ctrl+K). Close with Esc or Ctrl+Alt+Z.">Ctrl+K</kbd>
         </div>
 
         <div class="tm-nav-tabs">
           <button id="tab-timeline" class="tm-tab active" title="Visual moment filmstrip and video replay">
             <span class="icon">⏱</span>
-            <span>Replay</span>
+            <span class="tab-label">Replay</span>
           </button>
           <button id="tab-clipboard" class="tm-tab" title="Privacy-filtered clipboard timeline">
             <span class="icon">📋</span>
-            <span>Clipboard</span>
+            <span class="tab-label">Clipboard</span>
             <span class="tab-badge" id="clip-count-badge">0</span>
           </button>
           <button id="tab-stats" class="tm-tab" title="Inbuilt productivity and focus analytics">
             <span class="icon">📊</span>
-            <span>Stats</span>
+            <span class="tab-label">Stats</span>
           </button>
           <button id="tab-backups" class="tm-tab" title="Multi-checkpoint snapshots and disaster recovery">
             <span class="icon">💾</span>
-            <span>Checkpoints</span>
+            <span class="tab-label">Checkpoints</span>
             <span class="tab-badge" id="checkpoint-count-badge">0</span>
           </button>
         </div>
@@ -90,7 +94,7 @@
           </button>
           <button id="export-gif-btn" class="tm-export-btn" title="Export the last 5 seconds as an animated GIF">
             <span>⚡</span>
-            <span>Export 5s GIF</span>
+            <span class="btn-label">Export 5s GIF</span>
           </button>
           <button id="tm-close-btn" class="tm-close-btn" title="Close Time Machine (Esc)">✕</button>
         </div>

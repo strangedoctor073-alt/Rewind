@@ -6,9 +6,23 @@
  * - Tier 3: File system differential snapshot rollback
  */
 
-import { spawn } from 'node:child_process'
+import { spawn as nodeSpawn } from 'node:child_process'
+
+// Testable indirection: real code always goes through nodeSpawn. Unit tests
+// inject a fake here (see _setSpawnForTesting) so they never launch a real
+// host binary, without fighting ESM/vi.mock interop across module boundaries.
+let spawnImpl = nodeSpawn
+
+/**
+ * Testing hook: inject a fake `spawn`. Call with no arguments to restore the
+ * real implementation.
+ * @param {((command: string, args: string[], options: object) => import('node:child_process').ChildProcess)|null} [fn]
+ */
+export function _setSpawnForTesting(fn) {
+  spawnImpl = fn || nodeSpawn
+}
 import fs from 'node:fs'
-import { sendCtrlZ, restoreWindowPosition, getActiveWindow } from './win32.js'
+import { sendCtrlZ, restoreWindowPosition, getActiveWindow, sanitizeNativeString } from './win32.js'
 
 export const UndoTier = {
   ACTIVE_HOTKEY: 'ACTIVE_HOTKEY',
@@ -32,37 +46,60 @@ export class UndoEngine {
 
   /**
    * Relaunches a closed application and restores its screen geometry.
+   *
+   * Prefers spawning the exact captured executable path. If that path is
+   * missing or was recorded before the exePath sanitization fix (i.e. it
+   * doesn't exist on disk), falls back to asking Windows to resolve the
+   * process name itself (the same "App Paths" lookup Start > Run uses), so a
+   * relaunch doesn't hard-fail just because the absolute path didn't match.
+   * The fallback launch can't be tracked by PID, so geometry restoration is
+   * best-effort in that case; the relaunch itself still succeeds.
    * @param {string} exePath
    * @param {{x: number, y: number, width: number, height: number}} bounds
+   * @param {string} [processName]
    * @returns {Promise<boolean>}
    */
-  static async resurrectWindow(exePath, bounds) {
-    if (!exePath || !fs.existsSync(exePath)) {
-      console.warn('[REWIND Undo] Executable path not found:', exePath)
+  static async resurrectWindow(exePath, bounds, processName) {
+    const cleanPath = sanitizeNativeString(exePath)
+    const usingFallback = !cleanPath || !fs.existsSync(cleanPath)
+
+    if (usingFallback && !processName) {
+      console.warn('[REWIND Undo] Executable path not found and no process name to fall back to:', exePath)
       return false
     }
 
     try {
-      const child = spawn(exePath, [], {
-        detached: true,
-        stdio: 'ignore',
-      })
+      const child = usingFallback
+        ? spawnImpl('cmd.exe', ['/c', 'start', '""', processName], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true,
+          })
+        : spawnImpl(cleanPath, [], {
+            detached: true,
+            stdio: 'ignore',
+          })
       child.unref()
 
-      // Poll briefly to find the resurrected window and restore geometry
-      let attempts = 0
-      const pollTimer = setInterval(() => {
-        attempts += 1
-        const active = getActiveWindow()
-        if (active && active.pid === child.pid) {
-          clearInterval(pollTimer)
-          if (bounds) {
-            restoreWindowPosition(active.hwnd, bounds)
+      // Poll briefly to find the resurrected window and restore geometry.
+      // Only meaningful for the direct-path launch: the fallback goes through
+      // `cmd /c start`, whose own PID exits immediately and never matches the
+      // relaunched app's window.
+      if (!usingFallback) {
+        let attempts = 0
+        const pollTimer = setInterval(() => {
+          attempts += 1
+          const active = getActiveWindow()
+          if (active && active.pid === child.pid) {
+            clearInterval(pollTimer)
+            if (bounds) {
+              restoreWindowPosition(active.hwnd, bounds)
+            }
+          } else if (attempts > 15) {
+            clearInterval(pollTimer)
           }
-        } else if (attempts > 15) {
-          clearInterval(pollTimer)
-        }
-      }, 300)
+        }, 300)
+      }
 
       return true
     } catch (err) {
@@ -87,7 +124,7 @@ export class UndoEngine {
 
     // If window was closed or executable exists, resurrect it
     if (event.kind === 'window-closed' || event.exePath) {
-      const ok = await this.resurrectWindow(event.exePath, event.bounds)
+      const ok = await this.resurrectWindow(event.exePath, event.bounds, event.processName)
       return { success: ok, action: 'resurrected' }
     }
 

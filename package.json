@@ -1,14 +1,29 @@
 {
   "name": "rewind",
-  "version": "0.2.0",
-  "description": "A local-first interaction recorder and replay timeline for supported web surfaces.",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-first window-activity timeline, universal-undo hotkey and browser interaction recorder for Windows and Chromium.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strangedoctor073-alt/Rewind.git"
+  },
+  "bugs": {
+    "url": "https://github.com/strangedoctor073-alt/Rewind/issues"
+  },
+  "homepage": "https://github.com/strangedoctor073-alt/Rewind#readme",
+  "engines": {
+    "node": ">=20.19"
+  },
   "keywords": [
-    "recording",
-    "replay",
-    "timeline",
-    "react",
-    "developer-tools"
+    "undo",
+    "time-machine",
+    "electron",
+    "windows",
+    "session-replay",
+    "chrome-extension",
+    "local-first",
+    "privacy"
   ],
   "type": "module",
   "scripts": {

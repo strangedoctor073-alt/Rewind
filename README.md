@@ -5,113 +5,98 @@
 </p>
 
 <p align="center">
-  <strong>The Local-First Interaction Recorder, Universal Undo & Desktop Time Machine.</strong><br />
-  Scrub back in time across your whole PC or browser, resurrect closed apps & terminal sessions, export 5-second moments as GIFs, recover overwritten clipboards, and undo changes with verified focus handshakes — 100% private, local, and hardware-accelerated.
+  <strong>A local-first window-activity timeline, universal-undo hotkey and in-browser interaction recorder.</strong><br />
+  Jump back through the apps and windows you used, relaunch what you closed, recover clipboard text you overwrote, and record &amp; replay web sessions. Everything stays on your machine.
 </p>
 
 <p align="center">
   <a href="https://github.com/strangedoctor073-alt/Rewind/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/strangedoctor073-alt/Rewind/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status" /></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Chrome%20MV3-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/Desktop-Tauri%202.0%20%2B%20Electron-61dafb?style=flat-square" alt="Desktop Dual-Engine" />
+  <img src="https://img.shields.io/badge/Desktop-Electron%20(Windows)-61dafb?style=flat-square" alt="Desktop: Electron on Windows" />
   <img src="https://img.shields.io/badge/Privacy-Zero%20Keylogging-d9ff58?style=flat-square&color=black" alt="Zero Keylogging" />
-  <img src="https://img.shields.io/badge/Storage-20s%20Atomic%20WAL-success?style=flat-square" alt="20s Atomic WAL" />
+  <img src="https://img.shields.io/badge/Backups-20s%20auto--save-success?style=flat-square" alt="20s Atomic WAL" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT" /></a>
 </p>
 
 ---
 
-## 🌟 Choose Your Mode
+## Choose Your Mode
 
 | Mode | Target | Status | How to Launch |
 | :--- | :--- | :--- | :--- |
-| **REWIND Desktop Time Machine** | Entire PC (VS Code, Chrome, Word, Photoshop, Figma, Terminal, Discord) | **Active** | `npm run desktop` (or native Tauri binary) |
-| **REWIND Web Extension** | Active browser tab interactions & DOM replay | **Active** | `npm run build:extension` |
-| **React Dev Fixture** | Interactive scrubber, speed controls & replay testing | **Active** | `npm run dev` |
+| **REWIND Desktop Time Machine** | Windows: window-activity timeline, clipboard history, undo hotkey | **v1, Windows 10/11 only** | `npm run desktop` |
+| **REWIND Web Extension** | Active browser tab interactions & DOM replay | **v1, Chromium MV3** | `npm run build:extension` |
+| **React Dev Fixture** | Interactive scrubber, speed controls & replay testing | Demo / test fixture | `npm run dev` |
 
 ---
 
-## Why REWIND?
+## What it actually does
 
-Traditional bug reporters, screen recorders, and commercial rewind utilities suffer from severe flaws: they either **stream full screen recordings to third-party clouds**, run high-CPU video encoders that drain battery life, or face privacy backlash over raw keylogging.
+**Desktop Time Machine (Windows)**
 
-**REWIND takes a fundamentally different approach focused on high utility and zero bloat:**
+- **Window timeline.** Records which app and window title had focus, and when a window disappeared, with its size and position. Press `Ctrl+Alt+Z` to scrub through it. *It stores metadata, not screenshots or video.*
+- **Relaunch closed apps.** `Jump Here` relaunches a closed app and restores its window position. `Resurrect Shell` reopens the terminal executable in your home folder.
+- **Clipboard history.** A privacy-filtered history of text you copied, so an overwritten clipboard is recoverable.
+- **Universal Undo.** Sends `Ctrl+Z` to the active app only after verifying that window really has focus (500 ms handshake).
+- **Checkpoints & backups.** Named checkpoints, plus an automatic backup every 20 s written atomically for crash recovery.
+- **Activity stats.** Local focus score, context-switch rate and per-app time. Nothing leaves your machine.
+- **Privacy filter.** Skips known password managers and windows whose titles mention incognito / private browsing, passwords or sign-in.
+- **5-second GIF.** Exports the last 5 seconds of the timeline as a small animated GIF of title cards (not a screen recording).
 
-- **⚡ Deep State & Terminal Resurrection**: Accidentally closed your terminal? 1-click **"Resurrect Shell"** re-launches the shell at the exact working directory with prior command history and scrollback output restored.
-- **⚡ Inbuilt Productivity & Activity Stats Service**: Automatic zero-telemetry local analytics calculating deep work focus scores, context-switch frequency, app time distributions, and rescue counters.
-- **⚡ Video & Visual Replay Engine**: Smooth moment scrubbing with play/pause, variable speeds (0.5x, 1x, 2x, 4x), step controls, and native CSS scroll-driven animations (`animation-timeline: view(inline)`).
-- **⚡ Multi-Checkpoint Disaster Recovery**: Save named milestone snapshots, 1-click restore session states, and export/import portable encrypted `.rewind.backup` bundles.
-- **⚡ 1-Click 5-Second Animated GIF Exporter**: Turn any moment in your history into a lightweight animated GIF (`GIF89a`) in seconds to share bug repros with teammates.
-- **⚡ Instant OCR & Click-to-Copy**: Tokenizes on-screen text, URLs, and errors into clickable bounding boxes with sub-millisecond search across your screen history.
-- **⚡ Tactile Retro Audio Feedback**: Generates synthesized mechanical clicks when scrubbing through history and a satisfying pneumatic whoosh upon resurrection (with an instant mute toggle).
-- **⚡ Ghost Shield & Battery Guard**: Automatically pauses capture during full-screen 3D games (`SHQueryUserNotificationState`) and throttles on low battery (<20%). Automatically blacks out password managers (`1Password`, `Bitwarden`, `KeePass`) and incognito tabs.
-- **⚡ 100% Local-First & Private**: Everything stays on your machine. Persisted state blobs are gzip-compressed and encrypted via AES-256-GCM / DPAPI. Zero external API calls, zero telemetry, zero servers.
-- **⚡ Universal Undo with Verified Focus**: Sends synthetic `Ctrl+Z` with a 500ms focus verification handshake so keystrokes never get misdirected.
+**Browser extension** records clicks, inputs (with sensitive fields masked), scrolls and navigation on any http(s) page and lets you browse and rewind the session.
 
----
+## Known limitations (read before you rely on it)
 
-## Comparison Matrix
+We would rather you hear this from us than find out later.
 
-| Feature | REWIND ↶ | Commercial Tools (Recall / Rewind.ai) | Cloud Session Replay (PostHog / LogRocket) |
-| :--- | :---: | :---: | :---: |
-| **Privacy & Storage** | **100% Local & Encrypted** | Cloud-synced or proprietary OS lock-in | Uploaded to remote ingestion servers |
-| **Keylogging** | **Zero (Blocked by design)** | Often captures or OCRs all inputs | Streams keystrokes over network |
-| **Closed App & Terminal Resurrection** | **Yes (Relaunch + scrollback buffer)** | ❌ Screenshot replay only | ❌ In-browser iframe only |
-| **Export 5s Moment as GIF** | **Yes (Built-in pure-JS encoder)** | ❌ Cloud video link only | ❌ Cloud dashboard only |
-| **System Overhead** | **<0.5% Idle CPU (Event-driven)** | High continuous video encoding | Continuous WebSocket streaming |
-| **Tactile Mechanical Audio** | **Yes (Synthesized Web Audio)** | ❌ Silent | ❌ Silent |
-| **Gaming & Battery Guard** | **Yes (Auto-throttles during 3D games)** | ❌ May cause frame drops | ❌ Continuous background drain |
-| **Crash Recovery** | **20s Atomic WAL** | Proprietary database | Cloud buffer |
+- **No screen capture.** REWIND does not record pixels. The filmstrip and the GIF export are built from window metadata (process, title, geometry), not screenshots.
+- **"Search" is a text index, not OCR.** `Ctrl+K` searches process names, window titles and saved state. It does not read text off your screen.
+- **Terminal resurrection is shallow.** It relaunches the terminal executable in your home folder. Scrollback, command history and the real working directory are **not** captured yet.
+- **Encryption scope.** Saved state blobs use AES-256-GCM with a random per-install key protected by the OS secure store (DPAPI on Windows). If the OS store is unavailable, a weak fallback key is used and a warning is logged. `.rewind.backup` exports and checkpoints are **plain JSON**: treat them as sensitive files.
+- **Game and battery guards are not live.** `gameGuard.js` implements the logic (and is unit-tested), but the app does not yet feed it real full-screen-game or battery signals, so capture is never paused for those reasons.
+- **Windows only.** The Electron app needs Win32 APIs. Unit tests mock Win32 and run on Linux CI; verify on a real Windows machine with [MANUAL_TESTING.md](MANUAL_TESTING.md).
+- **Tauri is an experimental scaffold** in `desktop/tauri/`. It is not built in CI and is not a supported way to run REWIND.
+- **No performance benchmarks are published.** Idle CPU and search latency have not been measured.
 
 ---
 
 ## Quick Start
 
-For detailed step-by-step setup instructions, see **[SETUP.md](SETUP.md)**.
+For detailed setup, see **[SETUP.md](SETUP.md)**. Requires Node.js 20.19+ (CI uses 22).
 
-### 1. Launch REWIND Desktop Time Machine (System-Wide Windows)
+### 1. Desktop Time Machine (Windows)
 
 ```bash
-# Clone the repository
 git clone https://github.com/strangedoctor073-alt/Rewind.git
 cd Rewind
-
-# Install dependencies
 npm install
-
-# Launch REWIND Desktop Floating HUD & Time Machine
 npm run desktop
 ```
 
-- Press **`Ctrl+Alt+Z`** anywhere to expand into the **Time Machine Dashboard**.
-- Press **`Ctrl+K`** to search past window titles, apps, and documents.
-- Click **`↶ Resurrect Shell`** on any closed terminal card to restore your session!
-- Click **`⚡ Export 5s GIF`** to export an animated clip of your past screen moment.
-- Click the sound icon **`🔊 / 🔇`** to toggle tactile mechanical tick audio feedback.
+- Press **`Ctrl+Alt+Z`** anywhere to open or close the Time Machine.
+- Press **`Ctrl+K`** (with the Time Machine open) to search windows, apps and titles.
+- Click **`Resurrect Shell`** / **`Jump Here`** on a closed-window card to relaunch it.
+- Click **`Export 5s GIF`** to save a title-card GIF to your Downloads folder.
+- Click the speaker icon to toggle the scrub sound.
 
----
-
-### 2. Load the Chrome Extension (In-Browser DOM Recorder)
+### 2. Chrome extension
 
 ```bash
-# Build the Timeline dashboard into extension/
 npm run build:extension
 ```
 
-1. Open Google Chrome (or any Chromium browser: Brave, Edge, Arc).
-2. Navigate to `chrome://extensions/`.
-3. Enable **Developer mode** (toggle in the top-right corner).
-4. Click **Load unpacked** and select the `extension/` directory from this repository.
-5. Pin **REWIND** to your browser toolbar.
+1. Open `chrome://extensions/` in Chrome or any Chromium browser.
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select the `extension/` directory.
+4. Pin **REWIND** to your toolbar.
 
----
-
-### 3. Run the Component Dev Fixture (`src/`)
+### 3. Component dev fixture
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:5173/` in your browser to test interactive timeline scrubbing, undo/redo (`Ctrl/Cmd+Z`), speed adjustments, and `.rewind.json` export/import.
+Open `http://localhost:5173/` to try timeline scrubbing, undo/redo (`Ctrl/Cmd+Z`), speed controls and `.rewind.json` export/import.
 
 ---
 
@@ -121,45 +106,50 @@ Open `http://localhost:5173/` in your browser to test interactive timeline scrub
 
 | Shortcut | Action |
 | :--- | :--- |
-| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Z</kbd> | **Toggle Time Machine HUD Overlay** |
-| <kbd>Ctrl</kbd> + <kbd>K</kbd> | Focus instant search bar |
-| <kbd>←</kbd> / <kbd>→</kbd> | Scrub history horizontally with tactile audio |
-| <kbd>Esc</kbd> | Close Time Machine overlay |
+| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Z</kbd> | Toggle the Time Machine overlay (global) |
+| <kbd>Ctrl</kbd> + <kbd>K</kbd> | Focus the search bar |
+| <kbd>←</kbd> / <kbd>→</kbd> | Step through moments |
+| <kbd>Esc</kbd> | Close the overlay |
 
 ### Extension Timeline Dashboard
 
 | Shortcut | Action |
 | :--- | :--- |
-| <kbd>j</kbd> or <kbd>↓</kbd> | Navigate to next event |
-| <kbd>k</kbd> or <kbd>↑</kbd> | Navigate to previous event |
-| <kbd>Enter</kbd> | **Rewind to selected moment** |
-| <kbd>c</kbd> | Copy target element CSS selector to clipboard |
+| <kbd>j</kbd> or <kbd>↓</kbd> | Next event |
+| <kbd>k</kbd> or <kbd>↑</kbd> | Previous event |
+| <kbd>Enter</kbd> | Rewind to selected moment |
+| <kbd>c</kbd> | Copy target element CSS selector |
 | <kbd>/</kbd> | Focus session search bar |
 | <kbd>Esc</kbd> | Unfocus search bar |
+
+---
+
+## Privacy & security model
+
+- No network calls, no telemetry, no accounts. The overlay's Content-Security-Policy blocks all network access.
+- No keylogging: the app never installs keyboard hooks. The only keystroke it sends is a synthetic `Ctrl+Z` for Undo.
+- The overlay window is sandboxed (context isolation on, Node integration off) and can only talk to the main process through an allow-listed bridge. The main process resolves restore requests from its own timeline instead of trusting the renderer.
+- See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
 
 ---
 
 ## Development & Testing
 
 ```bash
-# Run full automated test suite (60 passing tests across 13 suites)
-npm test
-
-# Run ESLint linting (0 errors, 0 warnings)
-npm run lint
-
-# Run TypeScript typechecks across all targets
-npx tsc -b
+npm test          # 70 tests across 15 suites (Vitest)
+npm run lint      # ESLint
+npm run build     # typecheck + web build
+npm run build:extension
 ```
 
 ---
 
 ## Community & Contributing
 
-We welcome contributions from the community!
-- Please read our **[CONTRIBUTING.md](CONTRIBUTING.md)** for workflow and pull request guidelines.
-- Review our **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** before participating.
-- Check our **[SECURITY.md](SECURITY.md)** for our privacy guarantee and security reporting process.
+- Read **[CONTRIBUTING.md](CONTRIBUTING.md)** for workflow and pull request guidelines.
+- Review the **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** before participating.
+- Check **[SECURITY.md](SECURITY.md)** for the security policy and reporting process.
+- Release notes live in **[CHANGELOG.md](CHANGELOG.md)**.
 
 ---
 

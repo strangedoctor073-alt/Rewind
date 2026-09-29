@@ -11,6 +11,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+const CHECKPOINT_ID_PATTERN = /^chk-\d{1,16}$/
+
 export class BackupEngine {
   /**
    * @param {string} storageDir
@@ -181,13 +183,24 @@ export class BackupEngine {
   }
 
   /**
+   * Resolves a checkpoint id to a file inside checkpointsDir.
+   * Rejects anything that is not a generated `chk-<digits>` id (blocks path traversal).
+   * @param {unknown} id
+   * @returns {string|null}
+   */
+  checkpointPath(id) {
+    if (typeof id !== 'string' || !CHECKPOINT_ID_PATTERN.test(id)) return null
+    return path.join(this.checkpointsDir, `${id}.json`)
+  }
+
+  /**
    * Restores session state from a specific checkpoint.
    * @param {string} id
    * @returns {object|null}
    */
   restoreCheckpoint(id) {
-    const checkpointFile = path.join(this.checkpointsDir, `${id}.json`)
-    if (!fs.existsSync(checkpointFile)) return null
+    const checkpointFile = this.checkpointPath(id)
+    if (!checkpointFile || !fs.existsSync(checkpointFile)) return null
 
     try {
       const content = JSON.parse(fs.readFileSync(checkpointFile, 'utf-8'))
@@ -204,8 +217,8 @@ export class BackupEngine {
    * @returns {boolean}
    */
   deleteCheckpoint(id) {
-    const checkpointFile = path.join(this.checkpointsDir, `${id}.json`)
-    if (!fs.existsSync(checkpointFile)) return false
+    const checkpointFile = this.checkpointPath(id)
+    if (!checkpointFile || !fs.existsSync(checkpointFile)) return false
 
     try {
       fs.unlinkSync(checkpointFile)
@@ -258,8 +271,8 @@ export class BackupEngine {
     let count = 0
     if (Array.isArray(bundle.checkpoints)) {
       for (const chk of bundle.checkpoints) {
-        if (chk.id && chk.session) {
-          const dest = path.join(this.checkpointsDir, `${chk.id}.json`)
+        const dest = chk && chk.session ? this.checkpointPath(chk.id) : null
+        if (dest) {
           fs.writeFileSync(dest, JSON.stringify(chk, null, 2), 'utf-8')
           count++
         }

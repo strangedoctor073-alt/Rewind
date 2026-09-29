@@ -25,7 +25,7 @@ describe('multi-tier restoreMoment engine', () => {
 
     expect(result.success).toBe(true)
     expect(result.action).toBe('resurrected')
-    expect(mockResurrect).toHaveBeenCalledWith(event.exePath, event.bounds)
+    expect(mockResurrect).toHaveBeenCalledWith(event.exePath, event.bounds, event.processName)
   })
 
   it('returns graceful failure when event is empty or invalid', async () => {

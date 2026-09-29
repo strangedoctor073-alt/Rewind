@@ -8,26 +8,26 @@
 ## 🌟 Key Capabilities
 
 1. **Interactive Scrubbable Time Machine (Expanded Dashboard)**:
-   - Press **`Ctrl+Alt+Z`** (or click **"Timeline"** on the floating HUD pill) to expand into an immersive, frosted-glass dashboard (`960×520`).
+   - Press **`Ctrl+Alt+Z`** (or click **"Timeline"** on the floating HUD pill) to expand into an immersive, frosted-glass dashboard (`1100×520`).
    - Features a **horizontal filmstrip** displaying past window sessions, geometric layout schematics, relative timestamps ("Just now", "4m ago", "1h ago"), and deep state badges.
-   - **`↶ Resurrect Shell / Jump Here`**: 1-click relaunch of closed applications and terminal sessions with prior command history, scrollback output, and exact screen coordinates restored!
+   - **`↶ Resurrect Shell / Jump Here`**: 1-click relaunch of closed applications with their window position restored. For terminals it reopens the shell executable in your home folder (scrollback and command-history capture are not implemented yet).
 
 2. **1-Click 5-Second Animated GIF Exporter**:
    - Built-in pure-JS GIF89a encoder with infinite looping.
-   - Click **`⚡ Export 5s GIF`** to turn the last 5 seconds of your screen timeline into a shareable animated GIF in your Downloads folder.
+   - Click **`⚡ Export 5s GIF`** to turn the last 5 seconds of your window timeline into a shareable animated GIF of title cards (metadata only, not a screen recording) in your Downloads folder.
 
 3. **Tactile Retro-Futuristic Audio Feedback**:
    - Synthesizes crisp mechanical tick sounds when scrolling through the timeline.
    - Plays a pneumatic retro-futuristic whoosh upon window/state resurrection.
    - Includes a one-click mute toggle (**`🔊 / 🔇`**) in the header that persists across sessions.
 
-4. **Instant OCR & Click-to-Copy Search (`Ctrl+K`)**:
+4. **Instant Timeline Search (`Ctrl+K`)**:
    - Filter your entire session history in real-time by process name, window title, document name, or keywords.
-   - Spatial tokenization lets you hover and click any text from past moments to copy directly to your clipboard.
+   - Searches a local text index of process names, window titles and saved state. This is not screen OCR.
 
-5. **Ghost Shield & 3D Game / Battery Throttling**:
-   - Automatically pauses capture during full-screen 3D games (`SHQueryUserNotificationState`) and throttles on low battery (<20%).
-   - Automatically blanks out password managers (`1Password`, `Bitwarden`, `KeePass`) and incognito sessions.
+5. **Ghost Shield (privacy filter)**:
+   - Skips password managers (`1Password`, `Bitwarden`, `KeePass`, ...) and windows whose titles mention incognito / private browsing, passwords or sign-in.
+   - Game and battery throttling logic exists in `gameGuard.js` but is **not yet wired to live system signals**.
 
 6. **Privacy-Screened Clipboard Recovery**:
    - Tracks text copied during active app sessions, linking each snippet to the window context.
@@ -79,13 +79,13 @@ The compact floating pill will appear at the top-center of your screen. You can 
 
 ---
 
-## 🏗 Dual-Engine Architecture
+## 🏗 Architecture
 
 | Layer | Technology | Status |
 | :--- | :--- | :--- |
 | **Instant Prototype** | Electron + Koffi C FFI + Web Audio / CSS | Ready to run (`npm run desktop`) |
-| **Native Production Core** | Tauri 2.0 (Rust) + SQLite WAL + WGC | In `desktop/tauri/` |
-| **Storage & WAL** | 20s Atomic WAL + DPAPI Encryption | Active & Crash-Tested |
+| **Native core (experimental)** | Tauri 2.0 (Rust) scaffold | `desktop/tauri/`, not built in CI, not supported |
+| **Storage** | 20s atomic auto-backup; state blobs AES-256-GCM with an OS-protected key | Active |
 | **Web Extension** | Chrome MV3 (DOM Recorder & Replay) | In `extension/` & `src/` |
 
 ---

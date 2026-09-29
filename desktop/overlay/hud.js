@@ -10,7 +10,8 @@
  * - Privacy-screened clipboard history
  */
 
-const { ipcRenderer } = require('electron')
+// Sandboxed renderer: the allow-listed IPC bridge comes from desktop/preload.cjs
+const ipcRenderer = window.rewind
 
 // Compact Pill DOM Elements
 const appBadge = document.querySelector('#app-badge')
@@ -269,7 +270,7 @@ function renderFilmstrip() {
     const stateBadgeHtml = event.hasFullState || isTerm
       ? `<div class="tm-state-badge" title="Full state (scrollback, environment, cwd) preserved">
            <span class="badge-icon">⚡</span>
-           <span>Deep State Saved</span>
+           <span>Relaunchable</span>
          </div>`
       : ''
 

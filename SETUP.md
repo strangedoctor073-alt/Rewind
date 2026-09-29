@@ -12,7 +12,7 @@ Before starting, ensure you have the following installed:
 | :--- | :--- | :--- |
 | **Node.js** | `>= 18.0.0` (LTS recommended) | Verify with `node -v` |
 | **npm** | `>= 9.0.0` | Verify with `npm -v` |
-| **OS** | Windows 10 / 11 (64-bit) | For native Win32/DPAPI & desktop hooks |
+| **OS** | Windows 10 / 11 (64-bit) | For native Win32 window APIs and DPAPI-backed key storage |
 | **Browser** | Google Chrome, Edge, Brave, or Arc | For loading the Manifest V3 extension |
 | **Rust / Cargo** *(Optional)* | `>= 1.75` | Only needed if modifying `desktop/tauri/` native core |
 
@@ -53,8 +53,8 @@ npm run desktop
 
 - **Global Shortcut**: Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Z</kbd> from any application to expand or collapse the Time Machine.
 - **Search**: Press <kbd>Ctrl</kbd> + <kbd>K</kbd> to search past windows, commands, and documents.
-- **Resurrect Terminal**: Click `↶ Resurrect Shell` on any closed terminal card to restore your previous working directory and scrollback!
-- **1-Click 5s GIF**: Click `⚡ Export 5s GIF` to save an animated GIF of the past 5 seconds into your Downloads folder.
+- **Resurrect Terminal**: Click `↶ Resurrect Shell` on any closed terminal card to relaunch the terminal in your home folder (scrollback and history are not captured yet).
+- **1-Click 5s GIF**: Click `⚡ Export 5s GIF` to save a title-card GIF of the past 5 seconds of your window timeline into your Downloads folder.
 - **Tactile Sound**: Click the sound toggle `🔊 / 🔇` in the header to switch mechanical tick audio feedback on/off.
 
 ---
@@ -105,7 +105,7 @@ npm run lint
 npx tsc -b
 ```
 
-All 53 automated tests should pass with 0 errors and 0 warnings.
+All 70 automated tests should pass with 0 errors and 0 warnings.
 
 ---
 
@@ -115,11 +115,11 @@ All 53 automated tests should pass with 0 errors and 0 warnings.
 REWIND/
 ├── desktop/                  # Desktop Time Machine & system-wide engines
 │   ├── overlay/              # Always-on-top floating HUD (HTML, CSS, JS)
-│   ├── tauri/                # Native Rust core (Win32 hooks, WAL SQLite, audio)
+│   ├── tauri/                # Experimental Rust scaffold (not built in CI)
 │   ├── stateCapture.js       # Deep terminal state & 5 MiB compression engine
 │   ├── audioEngine.js        # Synthesized mechanical tick & pneumatic audio
 │   ├── gifExporter.js        # Pure-JS GIF89a 5-second moment exporter
-│   ├── ocrEngine.js          # Sub-ms spatial token text indexing & click-to-copy
+│   ├── ocrEngine.js          # Local text index for timeline search (not real OCR)
 │   ├── gameGuard.js          # Battery & 3D game capture throttling / ghost shield
 │   ├── undoEngine.js         # Tri-tier universal undo & focus verification
 │   ├── clipboardEngine.js    # Privacy-screened clipboard history manager
