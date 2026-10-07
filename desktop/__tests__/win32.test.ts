@@ -21,3 +21,16 @@ describe('sanitizeNativeString', () => {
     expect(sanitizeNativeString(undefined)).toBe('')
   })
 })
+
+describe('isWindowHung and getWindowTitle protection', () => {
+  it('isWindowHung returns false when not initialized or null hwnd', async () => {
+    const { isWindowHung } = await import('../win32.js')
+    expect(isWindowHung(null)).toBe(false)
+    expect(isWindowHung(0)).toBe(false)
+  })
+
+  it('getWindowTitle returns empty string when not initialized or null hwnd', async () => {
+    const { getWindowTitle } = await import('../win32.js')
+    expect(getWindowTitle(null)).toBe('')
+  })
+})

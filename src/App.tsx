@@ -24,8 +24,10 @@ function snapshotFor(event: RecordingEvent, previous: ReplaySnapshot): ReplaySna
 }
 
 import { isValidRecording } from './utils/validation'
+import { GrandDashboard } from './dashboard/GrandDashboard'
 
 function App() {
+  const [appMode, setAppMode] = useState<'studio' | 'fixture'>('studio')
   const [events, setEvents] = useState<RecordingEvent[]>(demoRecording.events)
   const [currentTime, setCurrentTime] = useState(demoRecording.duration)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -278,11 +280,59 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, selectedIndex, recording, title, canUndo, canRedo])
 
+  if (appMode === 'studio') {
+    return (
+      <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+        <GrandDashboard />
+        <button
+          onClick={() => setAppMode('fixture')}
+          style={{
+            position: 'fixed',
+            bottom: '44px',
+            right: '24px',
+            zIndex: 999,
+            padding: '7px 14px',
+            borderRadius: '8px',
+            background: 'rgba(15, 23, 42, 0.9)',
+            border: '1px solid rgba(0, 240, 255, 0.4)',
+            color: '#00f0ff',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+          }}
+          title="Switch to Web Dev Scrubber Fixture"
+        >
+          🛒 Switch to Demo Fixture
+        </button>
+      </div>
+    )
+  }
+
   return <main className="app-shell">
     <header className="topbar">
       <a className="brand" href="#workspace" aria-label="REWIND home"><span className="brand-mark">R</span>REWIND</a>
       <span className="session-status"><i />{notice}</span>
-      <div className="topbar-actions"><button aria-label="Keyboard shortcuts" aria-pressed={showShortcuts} onClick={() => setShowShortcuts((value) => !value)}>?</button><button className="avatar" aria-label="Profile">R</button></div>
+      <div className="topbar-actions">
+        <button
+          onClick={() => setAppMode('studio')}
+          style={{
+            padding: '4px 10px',
+            borderRadius: '6px',
+            background: 'linear-gradient(135deg, rgba(0,240,255,0.2), rgba(59,130,246,0.2))',
+            border: '1px solid #00f0ff',
+            color: '#00f0ff',
+            fontWeight: 600,
+            fontSize: '0.75rem',
+            cursor: 'pointer',
+            marginRight: '6px',
+          }}
+        >
+          ☍ Launch Studio
+        </button>
+        <button aria-label="Keyboard shortcuts" aria-pressed={showShortcuts} onClick={() => setShowShortcuts((value) => !value)}>?</button>
+        <button className="avatar" aria-label="Profile">R</button>
+      </div>
     </header>
     {showShortcuts && <div className="shortcuts-panel" role="dialog" aria-label="Keyboard shortcuts">
       <div className="shortcuts-head"><strong>Keyboard shortcuts</strong><button onClick={() => setShowShortcuts(false)} aria-label="Close shortcuts">×</button></div>

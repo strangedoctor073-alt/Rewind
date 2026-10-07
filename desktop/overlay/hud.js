@@ -257,7 +257,9 @@ function renderFilmstrip() {
   videoScrubberSlider.max = Math.max(0, filtered.length - 1)
   updateScrubberTimeDisplay(filtered)
 
-  filtered.forEach((event, idx) => {
+  const visibleBatch = filtered.slice(0, 50)
+
+  visibleBatch.forEach((event, idx) => {
     const card = document.createElement('div')
     const isTerm = isTerminalProcess(event.processName)
     card.className = `tm-card kind-${event.kind === 'window-closed' ? 'closed' : 'focus'} ${isTerm ? 'is-terminal' : ''}`
@@ -686,10 +688,14 @@ tabClipboard.addEventListener('click', () => switchTab('clipboard'))
 tabStats.addEventListener('click', () => switchTab('stats'))
 tabBackups.addEventListener('click', () => switchTab('backups'))
 
-// Live search input filtering
+// Live search input filtering (debounced 120ms to eliminate DOM thrashing)
+let searchDebounceTimer = null
 tmSearchInput.addEventListener('input', (e) => {
   currentSearch = e.target.value
-  renderFilmstrip()
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    renderFilmstrip()
+  }, 120)
 })
 
 // Preset filter buttons

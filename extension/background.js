@@ -69,7 +69,46 @@ async function getActiveSessionId(tabId) {
 }
 
 async function getActiveSession(tabId) {
+  await flushSessionBuffer(tabId)
   return getRecording(await getActiveSessionId(tabId))
+}
+
+const pendingSessionBuffers = new Map()
+
+async function flushSessionBuffer(tabId) {
+  const bufferInfo = pendingSessionBuffers.get(tabId)
+  if (!bufferInfo || bufferInfo.events.length === 0) return
+  if (bufferInfo.timer) clearTimeout(bufferInfo.timer)
+  pendingSessionBuffers.delete(tabId)
+
+  const recording = await getRecording(bufferInfo.recordingId)
+  if (recording) {
+    recording.events.push(...bufferInfo.events)
+    recording.duration = Math.max(recording.duration, bufferInfo.events.at(-1)?.timestamp || 0)
+    await saveRecording(recording)
+  }
+}
+
+async function queueSessionEvent(tabId, event) {
+  const recordingId = await getActiveSessionId(tabId)
+  if (!recordingId) return
+
+  let bufferInfo = pendingSessionBuffers.get(tabId)
+  if (!bufferInfo) {
+    bufferInfo = { recordingId, events: [], timer: null }
+    pendingSessionBuffers.set(tabId, bufferInfo)
+  }
+
+  bufferInfo.events.push(event)
+
+  if (bufferInfo.events.length >= 15) {
+    await flushSessionBuffer(tabId)
+  } else {
+    if (bufferInfo.timer) clearTimeout(bufferInfo.timer)
+    bufferInfo.timer = setTimeout(() => {
+      void flushSessionBuffer(tabId)
+    }, 600)
+  }
 }
 
 async function startRecording(tab) {
@@ -92,6 +131,7 @@ async function startRecording(tab) {
 }
 
 async function stopRecording(tabId) {
+  await flushSessionBuffer(tabId)
   const recording = await getActiveSession(tabId)
   if (!recording) throw new Error('No REWIND session exists for this tab.')
   try { await chrome.tabs.sendMessage(tabId, { type: 'REWIND_STOP' }) } catch { /* Tab may have navigated. Stored events remain usable. */ }
@@ -156,13 +196,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   ;(async () => {
     switch (message.type) {
       case 'REWIND_EVENT': {
-        if (!sender.tab?.id) return
-        const recording = await getActiveSession(sender.tab.id)
-        if (recording?.active && message.event) {
-          recording.events.push(message.event)
-          recording.duration = Math.max(recording.duration, message.event.timestamp || 0)
-          await saveRecording(recording)
-        }
+        if (!sender.tab?.id || !message.event) return
+        await queueSessionEvent(sender.tab.id, message.event)
         return
       }
 

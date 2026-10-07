@@ -111,120 +111,151 @@ function toggleTimeMachine() {
   setOverlayExpanded(!isTimeMachineExpanded)
 }
 
-function startWindowMonitor() {
-  setInterval(() => {
-    if (isPaused) return
+let monitorTimeout = null
 
-    try {
-      const current = getActiveWindow()
-      if (!current) return
+function scheduleNextMonitorTick(delayMs = 400) {
+  if (monitorTimeout) clearTimeout(monitorTimeout)
+  monitorTimeout = setTimeout(() => {
+    runMonitorCycle()
+  }, delayMs)
+}
 
-      // Ignore our own HUD window
-      if (current.title === 'REWIND Floating HUD' || current.title.includes('REWIND')) return
+function runMonitorCycle() {
+  const startTime = Date.now()
+  try {
+    if (isPaused) {
+      scheduleNextMonitorTick(400)
+      return
+    }
 
-      // Ghost Shield & Game / Battery Throttling Check
-      const guardCheck = gameGuard.shouldSuppressCapture({
-        processName: current.processName,
-        title: current.title,
-      })
-      if (guardCheck.suppress) {
-        return
-      }
+    const current = getActiveWindow()
+    if (!current) {
+      scheduleNextMonitorTick(400)
+      return
+    }
 
-      // Security & Privacy Denylist Check
-      if (!isWindowAllowed(current.processName, current.title)) {
-        return
-      }
+    // Ignore our own HUD window
+    if (current.title === 'REWIND Floating HUD' || current.title.includes('REWIND')) {
+      scheduleNextMonitorTick(400)
+      return
+    }
 
-      // Check for window change or window closure
-      if (!lastActiveWindow || lastActiveWindow.hwnd !== current.hwnd) {
-        const sanitizedTitle = sanitizeWindowTitle(current.title)
+    // Ghost Shield & Game / Battery Throttling Check
+    const guardCheck = gameGuard.shouldSuppressCapture({
+      processName: current.processName,
+      title: current.title,
+    })
+    if (guardCheck.suppress) {
+      scheduleNextMonitorTick(guardCheck.throttleMs || 800)
+      return
+    }
 
-        // If the previous window closed/switched, record closure with full state if applicable
-        if (lastActiveWindow && lastActiveWindow.hwnd !== current.hwnd && !isWindowAlive(lastActiveWindow.hwnd)) {
-          const isTerm = StateCaptureEngine.isTerminal(lastActiveWindow.processName)
-          let stateSummary = null
-          let statePayload = null
+    // Security & Privacy Denylist Check
+    if (!isWindowAllowed(current.processName, current.title)) {
+      scheduleNextMonitorTick(400)
+      return
+    }
 
-          try {
-            const captured = StateCaptureEngine.captureState({
-              processName: lastActiveWindow.processName,
-              exePath: lastActiveWindow.exePath,
-              title: lastActiveWindow.title,
-              bounds: lastActiveWindow.bounds,
-              cwd: process.env.USERPROFILE || 'C:\\',
-              buffer: '',
-              history: [],
-            })
-            stateSummary = captured.summary
-            statePayload = captured
-          } catch {
-            // fallback
-          }
+    // Check for window change or window closure
+    if (!lastActiveWindow || lastActiveWindow.hwnd !== current.hwnd) {
+      const sanitizedTitle = sanitizeWindowTitle(current.title)
 
-          const closeEvent = {
-            id: `evt-close-${Date.now()}`,
-            timestamp: Date.now(),
-            kind: 'window-closed',
+      // If the previous window closed/switched, record closure with full state if applicable
+      if (lastActiveWindow && lastActiveWindow.hwnd !== current.hwnd && !isWindowAlive(lastActiveWindow.hwnd)) {
+        let stateSummary = null
+        let statePayload = null
+
+        try {
+          const captured = StateCaptureEngine.captureState({
             processName: lastActiveWindow.processName,
             exePath: lastActiveWindow.exePath,
-            title: sanitizeWindowTitle(lastActiveWindow.title),
+            title: lastActiveWindow.title,
             bounds: lastActiveWindow.bounds,
-            hasFullState: !!statePayload,
-            stateSummary,
-            statePayload,
-            description: `Closed ${lastActiveWindow.processName}`,
-          }
-
-          // Index into OCR search
-          ocrEngine.indexSnapshot(closeEvent.id, `${closeEvent.processName} ${closeEvent.title} ${stateSummary || ''}`, closeEvent)
-
-          currentSession.events.unshift(closeEvent)
-          if (currentSession.events.length > 200) currentSession.events.pop()
-          backupEngine?.markDirty(currentSession)
+            cwd: process.env.USERPROFILE || 'C:\\',
+            buffer: '',
+            history: [],
+          })
+          stateSummary = captured.summary
+          statePayload = captured
+        } catch {
+          // fallback
         }
 
-        // Record focus change
-        const focusEvent = {
-          id: `evt-focus-${Date.now()}`,
+        const closeEvent = {
+          id: `evt-close-${Date.now()}`,
           timestamp: Date.now(),
-          kind: 'window-focus',
-          processName: current.processName,
-          exePath: current.exePath,
-          title: sanitizedTitle,
-          bounds: current.bounds,
-          description: `Focused ${current.processName}: ${sanitizedTitle}`,
+          kind: 'window-closed',
+          processName: lastActiveWindow.processName,
+          exePath: lastActiveWindow.exePath,
+          title: sanitizeWindowTitle(lastActiveWindow.title),
+          bounds: lastActiveWindow.bounds,
+          hasFullState: !!statePayload,
+          stateSummary,
+          statePayload,
+          description: `Closed ${lastActiveWindow.processName}`,
         }
 
         // Index into OCR search
-        ocrEngine.indexSnapshot(focusEvent.id, `${focusEvent.processName} ${focusEvent.title}`, focusEvent)
+        ocrEngine.indexSnapshot(closeEvent.id, `${closeEvent.processName} ${closeEvent.title} ${stateSummary || ''}`, closeEvent)
 
-        currentSession.events.unshift(focusEvent)
+        currentSession.events.unshift(closeEvent)
         if (currentSession.events.length > 200) currentSession.events.pop()
         backupEngine?.markDirty(currentSession)
-        statsEngine?.recordWindowSwitch(current.processName)
-        lastActiveWindow = current
+      }
 
-        // Update compact HUD
-        if (hudWindow && !hudWindow.isDestroyed()) {
-          hudWindow.webContents.send('active-window-updated', {
-            processName: current.processName,
-            title: sanitizedTitle || current.processName,
+      // Record focus change
+      const focusEvent = {
+        id: `evt-focus-${Date.now()}`,
+        timestamp: Date.now(),
+        kind: 'window-focus',
+        processName: current.processName,
+        exePath: current.exePath,
+        title: sanitizedTitle,
+        bounds: current.bounds,
+        isHung: !!current.isHung,
+        description: current.isHung
+          ? `Focused (Unresponsive) ${current.processName}`
+          : `Focused ${current.processName}: ${sanitizedTitle}`,
+      }
+
+      // Index into OCR search
+      ocrEngine.indexSnapshot(focusEvent.id, `${focusEvent.processName} ${focusEvent.title}`, focusEvent)
+
+      currentSession.events.unshift(focusEvent)
+      if (currentSession.events.length > 200) currentSession.events.pop()
+      backupEngine?.markDirty(currentSession)
+      statsEngine?.recordWindowSwitch(current.processName)
+      lastActiveWindow = current
+
+      // Update compact HUD
+      if (hudWindow && !hudWindow.isDestroyed()) {
+        hudWindow.webContents.send('active-window-updated', {
+          processName: current.processName,
+          title: sanitizedTitle || current.processName,
+          isHung: !!current.isHung,
+        })
+        if (isTimeMachineExpanded) {
+          hudWindow.webContents.send('time-machine-state', {
+            expanded: true,
+            events: currentSession.events,
+            clipboards: clipboardEngine ? clipboardEngine.getHistory() : [],
+            isPaused,
           })
-          if (isTimeMachineExpanded) {
-            hudWindow.webContents.send('time-machine-state', {
-              expanded: true,
-              events: currentSession.events,
-              clipboards: clipboardEngine ? clipboardEngine.getHistory() : [],
-              isPaused,
-            })
-          }
         }
       }
-    } catch {
-      // transient window switch error
     }
-  }, 400)
+  } catch {
+    // transient window switch error
+  } finally {
+    // Adaptive rate control: if cycle was slow, compensate next interval
+    const cycleDuration = Date.now() - startTime
+    const targetDelay = Math.max(250, 400 - cycleDuration)
+    scheduleNextMonitorTick(targetDelay)
+  }
+}
+
+function startWindowMonitor() {
+  scheduleNextMonitorTick(400)
 }
 
 app.whenReady().then(() => {

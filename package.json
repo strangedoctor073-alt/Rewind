@@ -1,6 +1,6 @@
 {
   "name": "rewind",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Local-first window-activity timeline, universal-undo hotkey and browser interaction recorder for Windows and Chromium.",
   "license": "MIT",
@@ -26,6 +26,9 @@
     "privacy"
   ],
   "type": "module",
+  "bin": {
+    "rewind": "./bin/rewind.js"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -33,10 +36,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "desktop": "electron desktop/main.js",
+    "cli": "node bin/rewind.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@xyflow/react": "^12.12.0",
+    "better-sqlite3": "^13.0.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

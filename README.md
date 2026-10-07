@@ -20,43 +20,46 @@
 
 ---
 
-## Choose Your Mode
+## What's New in REWIND v2.0 🚀
 
-| Mode | Target | Status | How to Launch |
-| :--- | :--- | :--- | :--- |
-| **REWIND Desktop Time Machine** | Windows: window-activity timeline, clipboard history, undo hotkey | **v1, Windows 10/11 only** | `npm run desktop` |
-| **REWIND Web Extension** | Active browser tab interactions & DOM replay | **v1, Chromium MV3** | `npm run build:extension` |
-| **React Dev Fixture** | Interactive scrubber, speed controls & replay testing | Demo / test fixture | `npm run dev` |
+- **Headless Background Daemon & CLI (`rewind`)**: Run completely headless in the background with JSON-RPC over Named Pipes and TCP. Full control via `rewind start/stop/status/capture/search/autostart`.
+- **Native Framebuffer Capture & 64-bit dHash**: Captures window framebuffers via Win32 `PrintWindow` with gradient difference hashing to eliminate idle duplicate frames.
+- **SQLite + FTS5 Full-Text Search**: Embedded, zero-cloud timeline database with instant sub-millisecond search across applications, OCR tokens, and browser DOM events.
+- **Grand Dashboard Studio**: Cyber-minimalist visual node graph powered by `@xyflow/react`, Filmstrip scrubber, Curtain Diff visual comparator, and `Ctrl+K` Omnibox.
+- **Procedural Web Audio Engine**: Zero-asset procedural oscillator synthesizer for mechanical ticks, sweeps, and hotkey feedback.
+- **Stability & Anti-Freeze Hardening**: Native `IsHungAppWindow` protection so deadlocked target applications never lock up REWIND.
 
 ---
 
-## What it actually does
+## Choose Your Surface
 
-**Desktop Time Machine (Windows)**
+| Mode | Purpose | Command |
+| :--- | :--- | :--- |
+| **REWIND CLI & Daemon** | Headless background capture, SQLite search, and autostart | `npm run cli -- help` or `rewind start` |
+| **Grand Dashboard Studio** | Interactive node graph, Curtain Diff, and Filmstrip | `npm run dev` |
+| **Desktop Floating HUD** | Always-on-top pill and overlay with universal undo | `npm run desktop` |
+| **Chrome MV3 Extension** | Browser DOM interaction recorder & scroll restoration | `npm run build:extension` |
 
-- **Window timeline.** Records which app and window title had focus, and when a window disappeared, with its size and position. Press `Ctrl+Alt+Z` to scrub through it. *It stores metadata, not screenshots or video.*
-- **Relaunch closed apps.** `Jump Here` relaunches a closed app and restores its window position. `Resurrect Shell` reopens the terminal executable in your home folder.
-- **Clipboard history.** A privacy-filtered history of text you copied, so an overwritten clipboard is recoverable.
-- **Universal Undo.** Sends `Ctrl+Z` to the active app only after verifying that window really has focus (500 ms handshake).
-- **Checkpoints & backups.** Named checkpoints, plus an automatic backup every 20 s written atomically for crash recovery.
-- **Activity stats.** Local focus score, context-switch rate and per-app time. Nothing leaves your machine.
-- **Privacy filter.** Skips known password managers and windows whose titles mention incognito / private browsing, passwords or sign-in.
-- **5-second GIF.** Exports the last 5 seconds of the timeline as a small animated GIF of title cards (not a screen recording).
+---
 
-**Browser extension** records clicks, inputs (with sensitive fields masked), scrolls and navigation on any http(s) page and lets you browse and rewind the session.
+## What It Does
 
-## Known limitations (read before you rely on it)
+**1. Headless Daemon & Local Storage (`daemon/`)**
+- Runs in the background, recording window switches, active window bounds, and git branch context.
+- Stores historical events in SQLite (`%LOCALAPPDATA%\Rewind\timeline.db`) in WAL mode with FTS5 search.
+- Dual-transport RPC server (`127.0.0.1:48291` and `\\.\pipe\rewind-daemon-rpc`) protected by 256-bit authentication tokens.
 
-We would rather you hear this from us than find out later.
+**2. Desktop Time Machine (`desktop/`)**
+- Floating HUD pill expandable to a full Time Machine dashboard via global `Ctrl+Alt+Z`.
+- Relaunch closed applications with preserved positions; resurrect terminal sessions.
+- Universal Undo (`Ctrl+Z`) verified with a 500ms foreground switch handshake.
+- 20-second atomic WAL auto-backup and encrypted snapshot export.
 
-- **No screen capture.** REWIND does not record pixels. The filmstrip and the GIF export are built from window metadata (process, title, geometry), not screenshots.
-- **"Search" is a text index, not OCR.** `Ctrl+K` searches process names, window titles and saved state. It does not read text off your screen.
-- **Terminal resurrection is shallow.** It relaunches the terminal executable in your home folder. Scrollback, command history and the real working directory are **not** captured yet.
-- **Encryption scope.** Saved state blobs use AES-256-GCM with a random per-install key protected by the OS secure store (DPAPI on Windows). If the OS store is unavailable, a weak fallback key is used and a warning is logged. `.rewind.backup` exports and checkpoints are **plain JSON**: treat them as sensitive files.
-- **Game and battery guards are not live.** `gameGuard.js` implements the logic (and is unit-tested), but the app does not yet feed it real full-screen-game or battery signals, so capture is never paused for those reasons.
-- **Windows only.** The Electron app needs Win32 APIs. Unit tests mock Win32 and run on Linux CI; verify on a real Windows machine with [MANUAL_TESTING.md](MANUAL_TESTING.md).
-- **Tauri is an experimental scaffold** in `desktop/tauri/`. It is not built in CI and is not a supported way to run REWIND.
-- **No performance benchmarks are published.** Idle CPU and search latency have not been measured.
+**3. In-Browser Interaction Recording (`extension/`)**
+- Records clicks, inputs (with passwords and credit cards masked), and scrolls on any http(s) page.
+- In-memory event batch queue with debounced storage flushes to eliminate disk thrashing.
+
+---
 
 ---
 

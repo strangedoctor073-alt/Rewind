@@ -51,11 +51,22 @@
     if (target instanceof HTMLElement) emit('click', 'CLICK', `Clicked ${label(target)}`, 'Pointer interaction recorded', target)
   }, true)
 
+  const inputDebounceMap = new WeakMap()
+
   document.addEventListener('input', (event) => {
     const target = event.target
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return
     const masked = sensitive(target)
-    emit('type', 'TYPE', `Typed in ${label(target)}`, masked ? 'Sensitive field masked' : `${target.value.length} character${target.value.length === 1 ? '' : 's'} recorded`, target, { value: masked ? '[masked]' : target.value, masked })
+
+    const prevTimer = inputDebounceMap.get(target)
+    if (prevTimer) clearTimeout(prevTimer)
+
+    const timer = setTimeout(() => {
+      inputDebounceMap.delete(target)
+      emit('type', 'TYPE', `Typed in ${label(target)}`, masked ? 'Sensitive field masked' : `${target.value.length} character${target.value.length === 1 ? '' : 's'} recorded`, target, { value: masked ? '[masked]' : target.value, masked })
+    }, 200)
+
+    inputDebounceMap.set(target, timer)
   }, true)
 
   window.addEventListener('scroll', () => {

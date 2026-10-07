@@ -40,6 +40,7 @@ let SetForegroundWindow = null
 let SetWindowPos = null
 let keybd_event = null
 let IsWindow = null
+let IsHungAppWindow = null
 let OpenProcess = null
 let QueryFullProcessImageNameW = null
 let CloseHandle = null
@@ -78,6 +79,7 @@ export function initWin32() {
       'uint32',
     ])
     IsWindow = user32.func('IsWindow', 'bool', ['intptr'])
+    IsHungAppWindow = user32.func('IsHungAppWindow', 'bool', ['intptr'])
     keybd_event = user32.func('keybd_event', 'void', ['uint8', 'uint8', 'uint32', 'uintptr'])
 
     // PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -99,10 +101,27 @@ export function initWin32() {
 }
 
 /**
+ * Checks if a window application is hung/unresponsive.
+ * @param {number|bigint} hwnd
+ * @returns {boolean}
+ */
+export function isWindowHung(hwnd) {
+  if (!isInitialized || !hwnd || !IsHungAppWindow) return false
+  try {
+    return Boolean(IsHungAppWindow(hwnd))
+  } catch {
+    return false
+  }
+}
+
+/**
  * Reads the title of a window by HWND.
+ * Guards against hung target applications by checking IsHungAppWindow first.
  */
 export function getWindowTitle(hwnd) {
   if (!isInitialized || !hwnd) return ''
+  // Never block the thread if target process is unresponsive
+  if (isWindowHung(hwnd)) return '[Not Responding]'
   try {
     const length = GetWindowTextLengthW(hwnd)
     if (length <= 0) return ''
@@ -173,6 +192,7 @@ export function getActiveWindow() {
     const hwnd = GetForegroundWindow()
     if (!hwnd) return null
 
+    const hung = isWindowHung(hwnd)
     const title = getWindowTitle(hwnd)
     const { pid, exePath, processName } = getWindowProcessInfo(hwnd)
     const bounds = getWindowBounds(hwnd)
@@ -184,6 +204,7 @@ export function getActiveWindow() {
       exePath,
       pid,
       bounds,
+      isHung: hung,
     }
   } catch {
     return null
