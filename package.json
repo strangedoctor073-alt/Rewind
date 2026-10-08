@@ -1,6 +1,6 @@
 {
   "name": "rewind",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "description": "Local-first window-activity timeline, universal-undo hotkey and browser interaction recorder for Windows and Chromium.",
   "license": "MIT",
