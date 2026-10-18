@@ -152,7 +152,16 @@ export class VaultEngine {
 
     const tmpPath = `${outputFilePath}.tmp`
     fs.writeFileSync(tmpPath, data)
-    fs.renameSync(tmpPath, outputFilePath)
+    try {
+      if (fs.existsSync(outputFilePath)) {
+        fs.unlinkSync(outputFilePath)
+      }
+      fs.renameSync(tmpPath, outputFilePath)
+    } catch {
+      // If atomic rename fails (e.g. cross-volume or Windows handle transition), fallback to copy
+      fs.copyFileSync(tmpPath, outputFilePath)
+      try { fs.unlinkSync(tmpPath) } catch { /* best effort */ }
+    }
 
     return meta
   }
