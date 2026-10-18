@@ -16,6 +16,8 @@ dist-ssr
 *.tmp
 *.wal
 *.token
+*.vault
+*.rewind-vault
 *.db
 *.db-shm
 *.db-wal
