@@ -147,6 +147,32 @@ describe('TimelineDatabase', () => {
     expect(events[1]).toMatchObject({ tabId: 3, pageTitle: 'Two', scrollY: 250 })
   })
 
+  it('inserts, retrieves, and searches clipboard entries', () => {
+    db.insertClipboardEntry({
+      id: 'c1',
+      contentText: 'const API_KEY = "my-secret"',
+      entropyScore: 4.8,
+      isRedacted: 1,
+      timestamp: 1000,
+    })
+    db.insertClipboardEntry({
+      id: 'c2',
+      contentText: 'git checkout -b feature/auth',
+      entropyScore: 2.1,
+      isRedacted: 0,
+      timestamp: 2000,
+    })
+
+    const history = db.getClipboardHistory(10)
+    expect(history).toHaveLength(2)
+    expect(history[0].id).toBe('c2') // Newest first
+    expect(history[1].id).toBe('c1')
+
+    const searchResults = db.searchClipboard('feature')
+    expect(searchResults).toHaveLength(1)
+    expect(searchResults[0].id).toBe('c2')
+  })
+
   it('checkpoint runs without error', () => {
     expect(() => db.checkpoint()).not.toThrow()
   })

@@ -28,6 +28,8 @@ vi.mock('../db/timelineDb.js', () => {
     this.purgeOlderThan = vi.fn(() => ({ removed: 0, screenshotPaths: [] }))
     this.getMomentById = vi.fn(() => undefined)
     this.getBrowserEventsBetween = vi.fn(() => [])
+    this.getClipboardHistory = vi.fn(() => [{ id: 'clip-1', contentText: 'hello world', timestamp: 1234567 }])
+    this.searchClipboard = vi.fn(() => [{ id: 'clip-1', contentText: 'hello world', timestamp: 1234567 }])
     this.insertMoment = vi.fn()
     this.close = vi.fn()
   }) as unknown as new (...args: unknown[]) => { getMoments: () => []; searchFts: () => []; close: () => void }
@@ -283,6 +285,26 @@ describe('RewindDaemon RPC method dispatch', () => {
     expect(res.schemaVersion).toBe('1.0.0')
     expect(res.error).toMatch(/not found/i)
     expect(res.chain).toHaveLength(0)
+  })
+
+  it('clipboard.history returns list of clipboard items', async () => {
+    const res = await dispatch('clipboard.history', { limit: 10 })
+    expect(Array.isArray(res)).toBe(true)
+    expect(res).toHaveLength(1)
+    expect(res[0].contentText).toBe('hello world')
+  })
+
+  it('clipboard.search filters items', async () => {
+    const res = await dispatch('clipboard.search', { query: 'hello' })
+    expect(Array.isArray(res)).toBe(true)
+    expect(res).toHaveLength(1)
+  })
+
+  it('ai.standup generates summary markdown', async () => {
+    const res = await dispatch('ai.standup', { type: 'daily_standup' })
+    expect(res).toBeDefined()
+    expect(typeof res.markdown).toBe('string')
+    expect(res.modelUsed).toBeDefined()
   })
 
   it('unknown method throws METHOD_NOT_FOUND error', async () => {

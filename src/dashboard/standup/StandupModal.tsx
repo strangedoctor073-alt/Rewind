@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useState } from 'react';
+import { callDaemon } from '../hooks/daemonClient';
 
 interface Props {
   isOpen: boolean;
@@ -19,15 +20,14 @@ export function StandupModal({ isOpen, onClose }: Props) {
   const handleGenerate = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await fetch(`/api/ai/standup?type=${summaryType}`);
-      if (resp.ok) {
-        const data = await resp.json() as { markdown: string };
+      const data = await callDaemon<{ markdown: string }>('ai.standup', { type: summaryType });
+      if (data && typeof data.markdown === 'string') {
         setSummaryText(data.markdown);
       } else {
         setSummaryText('Failed to generate summary. Please ensure REWIND daemon is running.');
       }
     } catch {
-      setSummaryText('Failed to connect to REWIND AI daemon.');
+      setSummaryText('Failed to connect to REWIND AI daemon. Run `rewind token` to pair.');
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,20 @@
 # Changelog
 
+## 5.10.0 - Full Subsystem Integration & RPC Unification
+
+### Added
+- **Clipboard Timeline RPCs** (`daemon/index.ts`, `daemon/db/timelineDb.ts`):
+  - Implemented `clipboard.history` and `clipboard.search` RPC methods on the daemon.
+  - Added query and FTS search helpers (`getClipboardHistory`, `searchClipboard`, `insertClipboardEntry`) to `TimelineDatabase`.
+  - Re-wired `ClipboardPanel.tsx` in the web studio to use authenticated JSON-RPC (`callDaemon`) instead of raw localhost `/api/` fetch requests.
+- **Cognitive Standup & AI RPC** (`daemon/index.ts`, `src/dashboard/standup/StandupModal.tsx`):
+  - Implemented `ai.standup` RPC handler dispatching to `OllamaConnector.generateSummary()` with offline heuristic fallback.
+  - Re-wired `StandupModal.tsx` to communicate with the daemon via `callDaemon('ai.standup', { type })`.
+- **Test Coverage**:
+  - Added unit test suites verifying clipboard history extraction, search, and AI summary dispatch in `timelineDb.test.ts` and `index.test.ts`.
+
+---
+
 ## 5.8.0 - Daemon-Extension Bridge & Cross-Origin Sync
 
 ### Added

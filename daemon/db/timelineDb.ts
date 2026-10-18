@@ -359,6 +359,70 @@ export class TimelineDatabase {
   }
 
   /**
+   * Clipboard history query, ordered newest first.
+   */
+  public getClipboardHistory(limit = 50, offset = 0): DbClipboardEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, moment_id AS momentId, content_text AS contentText,
+                entropy_score AS entropyScore, is_redacted AS isRedacted, timestamp
+         FROM clipboard_history
+         ORDER BY timestamp DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(clampInt(limit, 50, 1, 500), Math.max(0, clampInt(offset, 0, 0, 100000))) as Array<Record<string, unknown>>
+    return rows.map((r) => ({
+      id: String(r.id),
+      momentId: r.momentId == null ? undefined : String(r.momentId),
+      contentText: String(r.contentText),
+      entropyScore: r.entropyScore == null ? undefined : Number(r.entropyScore),
+      isRedacted: r.isRedacted == null ? 0 : Number(r.isRedacted),
+      timestamp: Number(r.timestamp),
+    }))
+  }
+
+  /**
+   * Search clipboard text in clipboard_history.
+   */
+  public searchClipboard(query: string, limit = 50): DbClipboardEntry[] {
+    const q = `%${query.replace(/[%_]/g, '')}%`
+    const rows = this.db
+      .prepare(
+        `SELECT id, moment_id AS momentId, content_text AS contentText,
+                entropy_score AS entropyScore, is_redacted AS isRedacted, timestamp
+         FROM clipboard_history
+         WHERE content_text LIKE ?
+         ORDER BY timestamp DESC
+         LIMIT ?`,
+      )
+      .all(q, clampInt(limit, 50, 1, 500)) as Array<Record<string, unknown>>
+    return rows.map((r) => ({
+      id: String(r.id),
+      momentId: r.momentId == null ? undefined : String(r.momentId),
+      contentText: String(r.contentText),
+      entropyScore: r.entropyScore == null ? undefined : Number(r.entropyScore),
+      isRedacted: r.isRedacted == null ? 0 : Number(r.isRedacted),
+      timestamp: Number(r.timestamp),
+    }))
+  }
+
+  public insertClipboardEntry(entry: DbClipboardEntry): void {
+    this.db
+      .prepare(
+        `INSERT INTO clipboard_history (id, moment_id, content_text, entropy_score, is_redacted, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        entry.id,
+        entry.momentId ?? null,
+        entry.contentText,
+        entry.entropyScore ?? null,
+        entry.isRedacted ?? 0,
+        entry.timestamp,
+      )
+  }
+
+  /**
    * Retention: delete everything older than `cutoffMs` (epoch ms).
    * Without this the database grew without bound once capture is live.
    * Returns the screenshot files that belonged to the deleted moments so the

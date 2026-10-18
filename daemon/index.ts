@@ -27,6 +27,7 @@ import { createWin32WindowDriver } from './resurrect/geometry/win32Driver.js'
 import { PlaywrightExporter } from './macros/playwright/playwrightExporter.js'
 import { PowerShellExporter, type PowerShellMacroStep } from './macros/devops/powershellExporter.js'
 import { FocusEngine } from './analytics/focusEngine.js'
+import { OllamaConnector } from './ai/ollamaConnector.js'
 import type { MacroBrowserEvent } from './macros/types.js'
 import type { Launcher } from './resurrect/types.js'
 
@@ -512,6 +513,40 @@ export class RewindDaemon {
           walStatus: 'clean',
           momentsRecorded,
         }
+      }
+
+      case 'clipboard.history': {
+        if (!this.db) return []
+        const limit = typeof params.limit === 'number' ? params.limit : 50
+        const offset = typeof params.offset === 'number' ? params.offset : 0
+        return this.db.getClipboardHistory(limit, offset)
+      }
+
+      case 'clipboard.search': {
+        if (!this.db) return []
+        const query = typeof params.query === 'string' ? params.query : typeof params.q === 'string' ? params.q : ''
+        const limit = typeof params.limit === 'number' ? params.limit : 50
+        if (!query.trim()) return this.db.getClipboardHistory(limit)
+        return this.db.searchClipboard(query, limit)
+      }
+
+      case 'ai.standup': {
+        if (!this.db) return { markdown: 'Timeline database not available.', appsInvolved: [], momentCount: 0, modelUsed: 'none' }
+        const summaryType = params.type === 'timesheet' || params.type === 'commit_draft' ? params.type : 'daily_standup'
+        const limit = typeof params.limit === 'number' ? params.limit : 100
+        const moments = this.db.getMoments({ limit }).map((row) => ({
+          appName: String(row.app_name ?? ''),
+          windowTitle: String(row.window_title ?? ''),
+          timestamp: Number(row.timestamp),
+        }))
+        const now = Date.now()
+        const connector = new OllamaConnector()
+        return connector.generateSummary({
+          periodStart: now - 86400000,
+          periodEnd: now,
+          moments,
+          summaryType,
+        })
       }
 
       default:

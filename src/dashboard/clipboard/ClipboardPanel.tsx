@@ -12,6 +12,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { callDaemon } from '../hooks/daemonClient';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -48,15 +49,14 @@ export function ClipboardPanel() {
   const fetchEntries = useCallback(async (searchQuery: string) => {
     setLoading(true);
     try {
-      const url = searchQuery
-        ? `/api/clipboard/search?q=${encodeURIComponent(searchQuery)}&limit=50`
-        : `/api/clipboard/history?limit=50`;
-      const resp = await fetch(url);
-      if (!resp.ok) return;
-      const data = await resp.json() as ClipboardEntry[];
-      setEntries(data);
+      const data = searchQuery
+        ? await callDaemon<ClipboardEntry[]>('clipboard.search', { query: searchQuery, limit: 50 })
+        : await callDaemon<ClipboardEntry[]>('clipboard.history', { limit: 50 });
+      if (Array.isArray(data)) {
+        setEntries(data);
+      }
     } catch {
-      // Daemon offline — leave existing entries
+      // Daemon offline / unauthenticated — leave existing entries
     } finally {
       setLoading(false);
     }
