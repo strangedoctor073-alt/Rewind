@@ -131,13 +131,21 @@ describe('extension service worker', () => {
     const rec = await startOn(4)
     await send({ type: 'REWIND_EVENT', event: evt(1) }, { tab: { id: 4 } })
     ;(removedListener as (id: number) => void)(4)
-    for (let i = 0; i < 40 && stored(rec.id)?.active !== false; i++) {
+    // Wait for recording to close (active → false) AND for the session pointer
+    // key to be removed. The two storage ops are sequential inside stopRecording
+    // but the fake store has a setTimeout(0) per operation, so we must poll
+    // until both are done to avoid a race on the second assertion.
+    for (
+      let i = 0;
+      i < 80 && (stored(rec.id)?.active !== false || 'rewind:session:4' in local.data);
+      i++
+    ) {
       await new Promise((r) => setTimeout(r, 50))
     }
     expect(stored(rec.id).active).toBe(false)
     expect(stored(rec.id).events).toHaveLength(2)
     expect(local.data['rewind:session:4']).toBeUndefined()
-  })
+  }, 20_000)
 
   it('bounds history to 30 recordings', async () => {
     for (let id = 100; id < 135; id++) {

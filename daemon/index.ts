@@ -12,7 +12,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { TimelineDatabase } from './db/timelineDb.js'
+import { TimelineDatabase, type DbMoment } from './db/timelineDb.js'
 import { RpcServer, type MethodHandler } from './rpc/rpcServer.js'
 import { HttpBridge } from './rpc/httpBridge.js'
 import { generateAuthToken, writeAuthToken } from './rpc/auth.js'
@@ -25,6 +25,8 @@ import { createDefaultLauncher } from './resurrect/launcher.js'
 import { WindowGeometryRestorer, type WindowDriver } from './resurrect/geometry/windowGeometryRestorer.js'
 import { createWin32WindowDriver } from './resurrect/geometry/win32Driver.js'
 import { PlaywrightExporter } from './macros/playwright/playwrightExporter.js'
+import { PowerShellExporter, type PowerShellMacroStep } from './macros/devops/powershellExporter.js'
+import { FocusEngine } from './analytics/focusEngine.js'
 import type { MacroBrowserEvent } from './macros/types.js'
 import type { Launcher } from './resurrect/types.js'
 
@@ -60,6 +62,24 @@ function defaultWorkspaceRoots(repoRoot: string): string[] {
 function boundedNumber(value: unknown, min: number, max: number): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   return Math.min(max, Math.max(min, value))
+}
+
+function rowToDbMoment(row: Record<string, unknown>): DbMoment {
+  return {
+    id: String(row.id),
+    timestamp: Number(row.timestamp),
+    appName: String(row.app_name ?? ''),
+    windowTitle: String(row.window_title ?? ''),
+    processPath: typeof row.process_path === 'string' ? row.process_path : undefined,
+    pid: typeof row.pid === 'number' ? row.pid : undefined,
+    boundsX: typeof row.bounds_x === 'number' ? row.bounds_x : undefined,
+    boundsY: typeof row.bounds_y === 'number' ? row.bounds_y : undefined,
+    boundsW: typeof row.bounds_w === 'number' ? row.bounds_w : undefined,
+    boundsH: typeof row.bounds_h === 'number' ? row.bounds_h : undefined,
+    phash: typeof row.phash === 'string' ? row.phash : undefined,
+    screenshotPath: typeof row.screenshot_path === 'string' ? row.screenshot_path : undefined,
+    isClosed: typeof row.is_closed === 'number' ? row.is_closed : undefined,
+  }
 }
 
 const HOUR_MS = 60 * 60 * 1000
@@ -346,7 +366,49 @@ export class RewindDaemon {
             generateAssertions: Boolean(params.generateAssertions),
           })
         }
+
+        if (format === 'powershell') {
+          const steps = (Array.isArray(params.steps) ? params.steps : []) as PowerShellMacroStep[]
+          return PowerShellExporter.export(steps, {
+            scriptName: typeof params.scriptName === 'string' ? params.scriptName : undefined,
+            elevated: Boolean(params.elevated),
+            stopOnError: params.stopOnError !== false,
+          })
+        }
+
         throw { code: -32602, message: `Unsupported export format "${format}"` }
+      }
+
+      case 'analytics.focusReport': {
+        if (!this.db) {
+          return FocusEngine.analyze([])
+        }
+        const limit = typeof params.limit === 'number' ? params.limit : 500
+        const moments = this.db.getMoments({ limit }).map(rowToDbMoment)
+        return FocusEngine.analyze(moments)
+      }
+
+      case 'analytics.telemetryStats': {
+        let focusScore = 100
+        let contextSwitchesPerHour = 0
+        let activeSessionDurationMinutes = 0
+        const momentsRecorded = this.db ? this.db.countMoments() : 0
+
+        if (this.db) {
+          const moments = this.db.getMoments({ limit: 100 }).map(rowToDbMoment)
+          const report = FocusEngine.analyze(moments)
+          focusScore = report.focusScore
+          contextSwitchesPerHour = report.contextSwitchesPerHour
+          activeSessionDurationMinutes = report.totalDurationMinutes
+        }
+
+        return {
+          focusScore,
+          contextSwitchesPerHour,
+          activeSessionDurationMinutes,
+          walStatus: 'clean',
+          momentsRecorded,
+        }
       }
 
       default:

@@ -178,12 +178,17 @@ async function cmdStop() {
 async function cmdStatus() {
   try {
     const status = await sendRpcCommand('daemon.status')
+    const telemetry = await sendRpcCommand('analytics.telemetryStats').catch(() => null)
     const uptimeMin = Math.round((status.uptime || 0) / 60)
     console.log(`${BOLD}↶ REWIND Daemon Status${RESET}`)
     console.log(`  ${CYAN}Running:${RESET}  ${status.running ? GREEN + '●' : RED + '○'}${RESET} ${status.running ? 'Active' : 'Inactive'}`)
     console.log(`  ${CYAN}Paused:${RESET}   ${status.paused ? YELLOW + '⏸ Yes' : GREEN + '▶ No'}${RESET}`)
     console.log(`  ${CYAN}Uptime:${RESET}   ${uptimeMin} min (${status.uptime}s)`)
     console.log(`  ${CYAN}Moments:${RESET}  ${status.momentCount}`)
+    if (telemetry) {
+      console.log(`  ${CYAN}Focus:${RESET}    ${telemetry.focusScore >= 80 ? GREEN : YELLOW}${telemetry.focusScore}%${RESET}`)
+      console.log(`  ${CYAN}Switches:${RESET} ${telemetry.contextSwitchesPerHour}/hr`)
+    }
     console.log(`  ${CYAN}Database:${RESET} ${DIM}${status.dbPath}${RESET}`)
   } catch (err) {
     console.error(`${RED}✗ ${err.message}${RESET}`)
@@ -341,6 +346,50 @@ async function cmdMacro(args) {
   }
 }
 
+async function cmdVault(args) {
+  const action = args[0]?.toLowerCase()
+  if (action !== 'create' && action !== 'restore') {
+    console.error(`${RED}Usage: rewind vault <create|restore> [--in <path>] [--out <path>] [--pass <passphrase>]${RESET}`)
+    process.exit(1)
+  }
+
+  const inIdx = args.indexOf('--in')
+  const outIdx = args.indexOf('--out')
+  const passIdx = args.indexOf('--pass')
+
+  const base = process.env.LOCALAPPDATA || join(process.env.HOME || process.env.USERPROFILE || '.', 'AppData', 'Local')
+  const defaultDbPath = join(base, 'Rewind', 'timeline.db')
+  const defaultVaultPath = join(process.cwd(), 'backup.rewind-vault')
+
+  const inputPath = inIdx >= 0 ? args[inIdx + 1] : (action === 'create' ? defaultDbPath : defaultVaultPath)
+  const outputPath = outIdx >= 0 ? args[outIdx + 1] : (action === 'create' ? defaultVaultPath : defaultDbPath)
+  const passphrase = passIdx >= 0 ? args[passIdx + 1] : (process.env.REWIND_VAULT_PASS || 'rewind-default-vault')
+
+  try {
+    const compiledVault = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist-daemon', 'daemon', 'vault', 'vaultEngine.js')
+    const sourceVault = join(dirname(fileURLToPath(import.meta.url)), '..', 'daemon', 'vault', 'vaultEngine.js')
+    const vaultPath = existsSync(compiledVault) ? compiledVault : sourceVault
+    const { VaultEngine } = await import(pathToFileURL(vaultPath).href)
+
+    if (action === 'create') {
+      console.log(`${CYAN}🔒 Creating encrypted air-gapped vault...${RESET}`)
+      VaultEngine.createVaultFile(inputPath, outputPath, passphrase, {
+        description: `Exported from REWIND on ${new Date().toLocaleDateString()}`,
+      })
+      console.log(`${GREEN}✓ Vault archive created:${RESET} ${outputPath}`)
+    } else {
+      console.log(`${CYAN}🔓 Restoring encrypted vault...${RESET}`)
+      const meta = VaultEngine.restoreVaultFile(inputPath, outputPath, passphrase)
+      console.log(`${GREEN}✓ Vault restored to:${RESET} ${outputPath}`)
+      console.log(`  ${DIM}Created:${RESET} ${meta.createdAt} (${meta.originalSize} bytes)`)
+    }
+  } catch (err) {
+    console.error(`${RED}✗ Vault operation failed: ${err.message}${RESET}`)
+    process.exit(1)
+  }
+}
+
+
 
 async function cmdCapture() {
   try {
@@ -425,6 +474,7 @@ ${CYAN}COMMANDS${RESET}
   ${GREEN}autostart${RESET} <enable|disable|status> Manage Windows startup registration
   ${GREEN}export${RESET} [--branch <name>] Export provenance bundle for AI PR review
   ${GREEN}macro${RESET} export [options]        Export browser interactions as Playwright test script
+  ${GREEN}vault${RESET} <create|restore>        Air-gapped zero-knowledge AES-256 encrypted backups
   ${GREEN}help${RESET}                     Show this help message
 
 ${CYAN}EXAMPLES${RESET}
@@ -434,6 +484,7 @@ ${CYAN}EXAMPLES${RESET}
   ${DIM}rewind pause 30${RESET}           # Pause recording for 30 minutes
   ${DIM}rewind resurrect m-123 --dry-run${RESET} # Preview what would be reopened
   ${DIM}rewind macro export --output ./flow.spec.ts${RESET} # Export Playwright test
+  ${DIM}rewind vault create --out ./backup.rewind-vault${RESET} # Create encrypted backup
   ${DIM}rewind autostart enable${RESET}   # Launch on Windows login
   ${DIM}rewind export --branch feat/auth${RESET}
 `)
@@ -457,6 +508,7 @@ async function main() {
     case 'pause':     return cmdPause(args[1])
     case 'autostart': return cmdAutostart(args[1]?.toLowerCase())
     case 'macro':     return cmdMacro(args.slice(1))
+    case 'vault':     return cmdVault(args.slice(1))
     case 'export': {
       const branchIdx = args.indexOf('--branch')
       return cmdExport(branchIdx >= 0 ? args[branchIdx + 1] : undefined)
@@ -480,4 +532,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 }
 
 // Export for testing
-export { sendRpcCommand, printHelp, readAuthToken, parseResurrectArgs, daemonEntryPath, cmdMacro }
+export { sendRpcCommand, printHelp, readAuthToken, parseResurrectArgs, daemonEntryPath, cmdMacro, cmdVault }

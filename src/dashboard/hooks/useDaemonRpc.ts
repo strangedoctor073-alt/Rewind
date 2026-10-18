@@ -34,7 +34,7 @@ export function useDaemonRpc(fallbackMoments: DashboardMoment[]): DaemonRpcState
   const [isLive, setIsLive] = useState(false)
   const [needsToken, setNeedsToken] = useState(false)
   const [moments, setMoments] = useState<DashboardMoment[]>(fallbackMoments)
-  const [stats] = useState<TelemetryStats | null>(null)
+  const [stats, setStats] = useState<TelemetryStats | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const pollDaemon = useCallback(async () => {
@@ -53,9 +53,15 @@ export function useDaemonRpc(fallbackMoments: DashboardMoment[]): DaemonRpcState
     }
 
     try {
-      const rows = await callDaemon<Record<string, unknown>[]>('timeline.getRecent', { limit: 100 })
+      const [rows, telemetry] = await Promise.all([
+        callDaemon<Record<string, unknown>[]>('timeline.getRecent', { limit: 100 }),
+        callDaemon<TelemetryStats>('analytics.telemetryStats').catch(() => null),
+      ])
       setNeedsToken(false)
       setError(null)
+      if (telemetry) {
+        setStats(telemetry)
+      }
       if (Array.isArray(rows) && rows.length > 0) {
         // The daemon returns newest first; the dashboard lays moments out oldest to newest.
         setMoments(rows.map(rowToDashboardMoment).sort((a, b) => a.timestamp - b.timestamp))
