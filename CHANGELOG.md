@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.4.0 - Telemetry & Provenance
+
+### Added
+- **Focus Telemetry Widget** (`src/dashboard/telemetry/FocusTelemetryWidget.tsx`): Interactive dashboard panel featuring a 270° SVG circular Focus Score gauge, category-coded application breakdown bars, 24-hour activity heatmaps, and distraction spike monitoring. Integrated into Grand Dashboard with a new 📊 Analytics view mode and live polling from `analytics.focusReport`.
+- **Verified Undo RPC** (`daemon/index.ts`, RPC `timeline.undo`): Zero-trust verification resolving moment context exclusively from daemon SQLite store. Implements synthetic window-targeted `Ctrl+Z` dispatch via `WScript.Shell` on Windows without installing global keyboard hooks.
+- **Provenance Chain Exporter** (`daemon/index.ts`, RPC `provenance.export`): Zero-trust provenance exporter tracing moments backward and forward around an anchor moment with configurable window depth, returning structured schema versioning, branch information, and sanitized OCR tokens.
+
+---
+
 ## 5.2.0 - Autonomous Flow & Vaults
 
 ### Added

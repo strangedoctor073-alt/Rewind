@@ -28,3 +28,32 @@ export interface TelemetryStats {
   walStatus: 'clean' | 'syncing' | 'dirty'
   momentsRecorded: number
 }
+
+// ── Analytics / Focus engine types (mirrors daemon/analytics/focusEngine.ts) ──
+
+export type AppCategory = 'ide' | 'terminal' | 'design' | 'browser' | 'communication' | 'utility'
+
+export interface AppUsage {
+  appName: string
+  durationMs: number
+  durationMinutes: number
+  percentage: number
+  category: AppCategory
+}
+
+export interface HourlyHeatmapBucket {
+  /** 0–23 */
+  hour: number
+  /** 0–100 */
+  focusScore: number
+  momentCount: number
+}
+
+export interface FocusReport {
+  focusScore: number
+  contextSwitchesPerHour: number
+  totalDurationMinutes: number
+  distractionSpikeCount: number
+  appBreakdown: AppUsage[]
+  hourlyHeatmap: HourlyHeatmapBucket[]
+}

@@ -314,9 +314,70 @@ export class RewindDaemon {
         return this.db.searchFts(query, limit)
       }
 
-      case 'timeline.undo':
-        // Placeholder — will be implemented with Win32 Ctrl+Z integration
-        return { undone: false, reason: 'Not yet implemented' }
+      case 'timeline.undo': {
+        // Zero-trust: validate momentId; resolve target exclusively from the DB, not from the renderer.
+        const rawUndoId = typeof params.momentId === 'string' ? params.momentId : ''
+        const undoMomentId = rawUndoId.replace(/[^a-zA-Z0-9_-]/g, '')
+        if (!undoMomentId) {
+          return { undone: false, reason: 'No valid momentId provided' }
+        }
+        if (!this.db) {
+          return { undone: false, reason: 'Database not ready' }
+        }
+        // Resolve from internal timeline — never trust the renderer's copy of the moment.
+        const undoRows = this.db.getMoments({ limit: 2000 })
+        const undoRow = undoRows.find((r) => String(r.id) === undoMomentId)
+        if (!undoRow) {
+          return { undone: false, reason: `Moment ${undoMomentId} not found in timeline` }
+        }
+        const undoTarget = rowToDbMoment(undoRow)
+
+        // Synthetic Ctrl+Z via WScript.Shell — Windows only, no global keyboard hook installed.
+        // AppActivate focuses the window by title; SendKeys('^z') dispatches the keystroke.
+        if (process.platform !== 'win32') {
+          return {
+            undone: false,
+            reason: 'Undo via daemon requires Windows; use the desktop overlay on other platforms',
+            momentId: undoMomentId,
+            targetApp: undoTarget.appName,
+          }
+        }
+        try {
+          const { spawn } = await import('node:child_process')
+          // Escape single quotes for PowerShell string literal
+          const safeTitle = undoTarget.windowTitle.replace(/'/g, "''")
+          await new Promise<void>((resolve, reject) => {
+            const ps = spawn(
+              'powershell.exe',
+              [
+                '-NonInteractive', '-NoProfile', '-WindowStyle', 'Hidden',
+                '-Command',
+                `$ws = New-Object -COM WScript.Shell; $ws.AppActivate('${safeTitle}'); Start-Sleep -Milliseconds 150; $ws.SendKeys('^z')`,
+              ],
+              { detached: true, stdio: 'ignore' },
+            )
+            const psTimer = setTimeout(() => resolve(), 3000)
+            ps.on('error', (err) => { clearTimeout(psTimer); reject(err) })
+            ps.on('close', (code) => {
+              clearTimeout(psTimer)
+              if (code === 0) {
+                resolve()
+              } else {
+                reject(new Error(`ps exit ${code}`))
+              }
+            })
+            ps.unref()
+          })
+          return { undone: true, momentId: undoMomentId, targetApp: undoTarget.appName, windowTitle: undoTarget.windowTitle }
+        } catch (err) {
+          return {
+            undone: false,
+            reason: err instanceof Error ? err.message : 'Unknown PowerShell error',
+            momentId: undoMomentId,
+            targetApp: undoTarget.appName,
+          }
+        }
+      }
 
       case 'timeline.resurrectWorkspace':
         // Only a moment id (and flags) is read from params; see WorkspaceResurrector.
@@ -330,9 +391,51 @@ export class RewindDaemon {
       case 'git.context':
         return this.gitWatcher ? this.gitWatcher.getContext() : { branch: 'unknown', commitHash: '0000000', dirtyFileCount: 0, repoRoot: '.' }
 
-      case 'provenance.export':
-        // Placeholder — will delegate to ProvenanceExporter when connected
-        return { schemaVersion: '1.0.0', note: 'Provenance export placeholder' }
+      case 'provenance.export': {
+        // Zero-trust: validate momentId from params.
+        const rawProvId = typeof params.momentId === 'string' ? params.momentId : ''
+        const provMomentId = rawProvId.replace(/[^a-zA-Z0-9_-]/g, '')
+        const provDepth = typeof params.depth === 'number' ? Math.min(Math.max(1, Math.round(params.depth)), 50) : 10
+
+        if (!this.db) {
+          return { schemaVersion: '1.0.0', exportedAt: Date.now(), error: 'Database not ready', chain: [] }
+        }
+
+        const provRows = this.db.getMoments({ limit: 2000 })
+
+        let anchorIdx = 0
+        if (provMomentId) {
+          const idx = provRows.findIndex((r) => String(r.id) === provMomentId)
+          if (idx === -1) {
+            return { schemaVersion: '1.0.0', exportedAt: Date.now(), momentId: provMomentId, error: `Moment ${provMomentId} not found`, chain: [] }
+          }
+          anchorIdx = idx
+        }
+
+        // Gather `depth` moments centred around the anchor (half before, half after).
+        const half = Math.floor(provDepth / 2)
+        const sliceStart = Math.max(0, anchorIdx - half)
+        const sliceEnd = Math.min(provRows.length, sliceStart + provDepth)
+
+        const chain = provRows.slice(sliceStart, sliceEnd).map((r) => ({
+          id: String(r.id),
+          timestamp: Number(r.timestamp),
+          appName: String(r.app_name ?? ''),
+          windowTitle: String(r.window_title ?? ''),
+          gitBranch: typeof r.git_branch === 'string' ? r.git_branch : null,
+          phash: typeof r.phash === 'string' ? r.phash : null,
+          // Truncate OCR text to avoid oversized exports
+          ocrText: typeof r.ocr_text === 'string' ? r.ocr_text.slice(0, 200) : null,
+        }))
+
+        return {
+          schemaVersion: '1.0.0',
+          exportedAt: Date.now(),
+          momentId: provMomentId || chain[0]?.id || null,
+          depth: chain.length,
+          chain,
+        }
+      }
 
       case 'timeline.captureNow': {
         if (!this.captureEngine) return { captured: false, error: 'Capture engine not running' }

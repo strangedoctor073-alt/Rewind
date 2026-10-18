@@ -19,6 +19,7 @@ import { CurtainDiff } from './diff/CurtainDiff'
 import { Omnibox } from './omnibox/Omnibox'
 import { InspectorDrawer } from './inspector/InspectorDrawer'
 import { TelemetryBar } from './telemetry/TelemetryBar'
+import { FocusTelemetryWidget } from './telemetry/FocusTelemetryWidget'
 import { audioEngine } from '../audio/synth'
 import type { DashboardMoment, DashboardViewMode, TelemetryStats } from './types'
 import { useDaemonRpc } from './hooks/useDaemonRpc'
@@ -83,7 +84,7 @@ const initialMockMoments: DashboardMoment[] = [
 
 export const GrandDashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<DashboardViewMode>('flow')
-  const { isConnected, isLive, needsToken, moments, stats: liveStats, pair } = useDaemonRpc(initialMockMoments)
+  const { isConnected, isLive, needsToken, moments, stats: liveStats, focusReport, pair } = useDaemonRpc(initialMockMoments)
   const [selectedMomentId, setSelectedMomentId] = useState<string>('m3')
   const [isOmniboxOpen, setIsOmniboxOpen] = useState(false)
   const [isSoundMuted, setIsSoundMuted] = useState(audioEngine.isMuted())
@@ -271,6 +272,15 @@ export const GrandDashboard: React.FC = () => {
           >
             <span>⮂</span> Curtain Diff
           </button>
+          <button
+            className={`gd-nav-btn ${viewMode === 'telemetry' ? 'active' : ''}`}
+            onClick={() => {
+              setViewMode('telemetry')
+              audioEngine.playTick()
+            }}
+          >
+            <span>📊</span> Analytics
+          </button>
         </div>
 
         {/* Header Quick Controls */}
@@ -339,6 +349,10 @@ export const GrandDashboard: React.FC = () => {
 
           {viewMode === 'diff' && previousMoment && selectedMoment && (
             <CurtainDiff momentBefore={previousMoment} momentAfter={selectedMoment} />
+          )}
+
+          {viewMode === 'telemetry' && (
+            <FocusTelemetryWidget report={focusReport} />
           )}
         </div>
 

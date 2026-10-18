@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import type { DashboardMoment, TelemetryStats } from '../types'
+import type { DashboardMoment, FocusReport, TelemetryStats } from '../types'
 import {
   DaemonAuthError,
   callDaemon,
@@ -24,6 +24,8 @@ export interface DaemonRpcState {
   needsToken: boolean
   moments: DashboardMoment[]
   stats: TelemetryStats | null
+  /** Full focus analytics report — null when daemon is not paired or not running. */
+  focusReport: FocusReport | null
   error: string | null
   refresh: () => void
   pair: (token: string) => void
@@ -35,6 +37,7 @@ export function useDaemonRpc(fallbackMoments: DashboardMoment[]): DaemonRpcState
   const [needsToken, setNeedsToken] = useState(false)
   const [moments, setMoments] = useState<DashboardMoment[]>(fallbackMoments)
   const [stats, setStats] = useState<TelemetryStats | null>(null)
+  const [focusReport, setFocusReport] = useState<FocusReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const pollDaemon = useCallback(async () => {
@@ -53,14 +56,18 @@ export function useDaemonRpc(fallbackMoments: DashboardMoment[]): DaemonRpcState
     }
 
     try {
-      const [rows, telemetry] = await Promise.all([
+      const [rows, telemetry, report] = await Promise.all([
         callDaemon<Record<string, unknown>[]>('timeline.getRecent', { limit: 100 }),
         callDaemon<TelemetryStats>('analytics.telemetryStats').catch(() => null),
+        callDaemon<FocusReport>('analytics.focusReport', { limit: 500 }).catch(() => null),
       ])
       setNeedsToken(false)
       setError(null)
       if (telemetry) {
         setStats(telemetry)
+      }
+      if (report) {
+        setFocusReport(report)
       }
       if (Array.isArray(rows) && rows.length > 0) {
         // The daemon returns newest first; the dashboard lays moments out oldest to newest.
@@ -107,6 +114,7 @@ export function useDaemonRpc(fallbackMoments: DashboardMoment[]): DaemonRpcState
     needsToken,
     moments,
     stats,
+    focusReport,
     error,
     refresh: pollDaemon,
     pair,
