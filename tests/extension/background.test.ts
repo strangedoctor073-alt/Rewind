@@ -92,7 +92,7 @@ const stored = (id: string) => local.data[`rewind:recording:${id}`] as { events:
 
 describe('extension service worker', () => {
   it('recovers events a service worker buffered before it was evicted', async () => {
-    await import('../background.js')
+    await import('../../extension/background.js')
     for (let i = 0; i < 40 && session.data['rewind:pending:900'] !== undefined; i++) {
       await new Promise((r) => setTimeout(r, 50))
     }
