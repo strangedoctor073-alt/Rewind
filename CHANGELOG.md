@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.8.0 - Daemon-Extension Bridge & Cross-Origin Sync
+
+### Added
+- **Chrome Extension Host Permissions** (`extension/manifest.json`): Added `host_permissions` targeting loopback HTTP bridge endpoints (`http://127.0.0.1:48292/*`, `http://localhost:48292/*`), enabling unpacked extension pages and background service workers to directly communicate with the daemon.
+- **Strict Extension Origin Support** (`daemon/rpc/httpBridge.ts`): Allowed verified `chrome-extension://[a-p]{32}` origins in CORS preflight and RPC headers while defending against untrusted web origins.
+- Added tests in `daemon/rpc/__tests__/httpBridge.test.ts` validating extension preflight handshake acceptance.
+
+---
+
 ## 5.6.0 - NSIS Distribution & Packaging
 
 ### Added

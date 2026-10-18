@@ -11,6 +11,10 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "scripting", "storage", "tabs"]
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": [
+    "http://127.0.0.1:48292/*",
+    "http://localhost:48292/*"
+  ]
 }
 

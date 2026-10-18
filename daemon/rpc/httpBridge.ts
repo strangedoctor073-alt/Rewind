@@ -110,7 +110,11 @@ export class HttpBridge {
     if (!this.hostAllowed(req.headers.host)) return this.json(res, 403, { error: 'Forbidden host' })
 
     const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined
-    if (origin !== undefined && !this.allowedOrigins.has(origin)) return this.json(res, 403, { error: 'Forbidden origin' })
+    const isAllowedOrigin = origin !== undefined && (
+      this.allowedOrigins.has(origin) ||
+      /^chrome-extension:\/\/[a-p]{32}$/.test(origin)
+    )
+    if (origin !== undefined && !isAllowedOrigin) return this.json(res, 403, { error: 'Forbidden origin' })
 
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${this.port}`)
 

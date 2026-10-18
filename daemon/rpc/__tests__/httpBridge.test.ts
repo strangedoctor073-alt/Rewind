@@ -61,6 +61,9 @@ describe('HttpBridge', () => {
     const ok = await request(p, { method: 'OPTIONS', path: '/rpc', headers: { origin: 'http://localhost:5173' } })
     expect(ok.status).toBe(204)
     expect(ok.headers['access-control-allow-origin']).toBe('http://localhost:5173')
+    const extOk = await request(p, { method: 'OPTIONS', path: '/rpc', headers: { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' } })
+    expect(extOk.status).toBe(204)
+    expect(extOk.headers['access-control-allow-origin']).toBe('chrome-extension://abcdefghijklmnopabcdefghijklmnop')
     expect((await request(p, { method: 'OPTIONS', path: '/rpc', headers: { origin: 'https://evil.example' } })).status).toBe(403)
   })
 
