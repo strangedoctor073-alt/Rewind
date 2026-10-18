@@ -1,15 +1,21 @@
 import React, { useState } from 'react'
 import { audioEngine } from '../../audio/synth'
 import type { DashboardMoment } from '../types'
+import type { ResurrectReportView } from '../hooks/daemonClient'
 
 interface InspectorDrawerProps {
   moment: DashboardMoment | null
   onClose?: () => void
   onJump?: (moment: DashboardMoment) => void
+  /** Present only when connected to a live daemon; reopens the editor files, terminals and tabs around a moment. */
+  onResurrect?: (moment: DashboardMoment, dryRun: boolean) => Promise<ResurrectReportView>
 }
 
-export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({ moment, onJump }) => {
+export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({ moment, onJump, onResurrect }) => {
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
+  const [resurrectBusy, setResurrectBusy] = useState(false)
+  const [resurrectReport, setResurrectReport] = useState<ResurrectReportView | null>(null)
+  const [resurrectError, setResurrectError] = useState<string | null>(null)
 
   if (!moment) {
     return (
@@ -27,6 +33,20 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({ moment, onJump
     audioEngine.playChime()
     setCopiedToken(text)
     setTimeout(() => setCopiedToken(null), 1800)
+  }
+
+  const runResurrect = async (dryRun: boolean) => {
+    if (!onResurrect) return
+    setResurrectBusy(true)
+    setResurrectError(null)
+    try {
+      setResurrectReport(await onResurrect(moment, dryRun))
+    } catch (err) {
+      setResurrectReport(null)
+      setResurrectError(err instanceof Error ? err.message : 'Resurrection failed')
+    } finally {
+      setResurrectBusy(false)
+    }
   }
 
   return (
@@ -110,6 +130,44 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({ moment, onJump
           </code>
         </div>
       )}
+
+      <div>
+        <div className="inspector-section-title">Workspace Time Machine</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="rewind-btn rewind-btn-primary"
+            style={{ flex: 1, justifyContent: 'center' }}
+            disabled={!onResurrect || resurrectBusy}
+            title={onResurrect ? 'Reopen the editor files, terminals and browser tabs from around this moment' : 'Connect to the live daemon to use this'}
+            onClick={() => void runResurrect(false)}
+          >
+            {resurrectBusy ? 'Working…' : '⚡ Resurrect Workspace'}
+          </button>
+          <button
+            className="rewind-btn"
+            disabled={!onResurrect || resurrectBusy}
+            title="Show what would be reopened without launching anything"
+            onClick={() => void runResurrect(true)}
+          >
+            Preview
+          </button>
+        </div>
+        {resurrectError && <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: 6 }}>{resurrectError}</div>}
+        {resurrectReport && (
+          <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#cbd5e1' }}>
+            {resurrectReport.results.length === 0 && <div>Nothing resurrectable was found around this moment.</div>}
+            {resurrectReport.results.map((r, idx) => (
+              <div key={idx} style={{ marginBottom: 6 }}>
+                <span style={{ color: r.status === 'failed' ? '#f87171' : r.status === 'skipped' ? '#fbbf24' : '#34d399' }}>
+                  {r.status === 'launched' ? '✓' : r.status === 'planned' ? '•' : r.status === 'skipped' ? '–' : '✗'}
+                </span>{' '}
+                {r.label}
+                <div style={{ opacity: 0.65, wordBreak: 'break-word' }}>{r.detail}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
         <button

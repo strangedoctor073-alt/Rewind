@@ -111,4 +111,43 @@ describe('TimelineDatabase', () => {
     expect(record.url).toBe('https://github.com/strangedoctor073-alt/Rewind')
     expect(record.selector).toBe('#submit-pr-button')
   })
+  it('countMoments counts every row, not just a page of them', () => {
+    for (let i = 0; i < 120; i++) db.insertMoment({ id: `c${i}`, timestamp: i, appName: 'a.exe', windowTitle: 't' })
+    expect(db.countMoments()).toBe(120)
+    expect(db.getMoments()).toHaveLength(50) // default page size, which is why counting by length was wrong
+  })
+
+  it('clamps limit and offset from untrusted callers', () => {
+    for (let i = 0; i < 5; i++) db.insertMoment({ id: `l${i}`, timestamp: i, appName: 'a.exe', windowTitle: 't' })
+    expect(db.getMoments({ limit: -3 })).toHaveLength(1)
+    expect(db.getMoments({ limit: Number.NaN })).toHaveLength(5)
+    expect(db.getMoments({ limit: 5, offset: -10 })).toHaveLength(5)
+  })
+
+  it('purgeOlderThan removes old moments, their search entries and returns screenshot paths', () => {
+    db.insertMoment({ id: 'old', timestamp: 1000, appName: 'a.exe', windowTitle: 'ancient zebra', screenshotPath: '/shots/old.bmp' })
+    db.insertMoment({ id: 'new', timestamp: 9000, appName: 'a.exe', windowTitle: 'recent zebra', screenshotPath: '/shots/new.bmp' })
+    db.insertBrowserEvent({ id: 'be-old', url: 'https://a.test/', eventKind: 'navigate', timestamp: 1000 })
+    db.insertBrowserEvent({ id: 'be-new', url: 'https://b.test/', eventKind: 'navigate', timestamp: 9000 })
+
+    const result = db.purgeOlderThan(5000)
+
+    expect(result).toEqual({ removed: 1, screenshotPaths: ['/shots/old.bmp'] })
+    expect(db.countMoments()).toBe(1)
+    expect(db.searchFts('zebra').map((r) => r.moment_id)).toEqual(['new'])
+    expect(db.getBrowserEventsBetween(0, 10000).map((e) => e.id)).toEqual(['be-new'])
+  })
+
+  it('getBrowserEventsBetween returns events in range, oldest first, as camelCase', () => {
+    db.insertBrowserEvent({ id: 'b2', tabId: 3, url: 'https://x.test/2', pageTitle: 'Two', eventKind: 'scroll', scrollY: 250, timestamp: 2000 })
+    db.insertBrowserEvent({ id: 'b1', tabId: 3, url: 'https://x.test/1', eventKind: 'navigate', timestamp: 1000 })
+    db.insertBrowserEvent({ id: 'b3', url: 'https://x.test/3', eventKind: 'navigate', timestamp: 9000 })
+    const events = db.getBrowserEventsBetween(500, 2500)
+    expect(events.map((e) => e.id)).toEqual(['b1', 'b2'])
+    expect(events[1]).toMatchObject({ tabId: 3, pageTitle: 'Two', scrollY: 250 })
+  })
+
+  it('checkpoint runs without error', () => {
+    expect(() => db.checkpoint()).not.toThrow()
+  })
 })

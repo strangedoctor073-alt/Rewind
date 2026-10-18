@@ -11,7 +11,7 @@
  */
 
 import type Database from 'better-sqlite3';
-import { IEmbeddingEngine } from './embeddings.js';
+import type { IEmbeddingEngine } from './embeddings.js';
 import { VectorStore } from './vectorStore.js';
 
 export interface HybridSearchResult {

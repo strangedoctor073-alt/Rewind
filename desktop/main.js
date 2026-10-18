@@ -40,6 +40,17 @@ let isTimeMachineExpanded = false
 let isPaused = false
 let pauseTimeout = null
 
+const DEFAULT_PAUSE_MINUTES = 15
+const MAX_PAUSE_MINUTES = 24 * 60
+const MAX_CLIPBOARD_CHARS = 1_000_000
+const MAX_LABEL_CHARS = 80
+
+/** Renderer input is untrusted: coerce to a sane number of minutes. */
+function sanitizePauseMinutes(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return DEFAULT_PAUSE_MINUTES
+  return Math.min(MAX_PAUSE_MINUTES, value)
+}
+
 let currentSession = {
   id: `session-${Date.now()}`,
   startedAt: new Date().toISOString(),
@@ -134,8 +145,10 @@ function runMonitorCycle() {
       return
     }
 
-    // Ignore our own HUD window
-    if (current.title === 'REWIND Floating HUD' || current.title.includes('REWIND')) {
+    // Ignore our own windows. Matching on the process id instead of the title:
+    // the old `title.includes('REWIND')` also hid any window that merely had
+    // "Rewind" in its title, such as an editor open on this very project.
+    if (current.pid === process.pid) {
       scheduleNextMonitorTick(400)
       return
     }
@@ -258,7 +271,17 @@ function startWindowMonitor() {
   scheduleNextMonitorTick(400)
 }
 
+// A second instance would double-capture and fight over the same files.
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
+app.on('second-instance', () => {
+  if (hudWindow && !hudWindow.isDestroyed()) hudWindow.show()
+})
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return
   initWin32()
   setStorageKeyProvider(createKeyProvider({ safeStorage, dir: app.getPath('userData') }))
 
@@ -272,7 +295,7 @@ app.whenReady().then(() => {
     currentSession = recovered
   }
 
-  backupEngine.onSave((_path, _ts) => {
+  backupEngine.onSave(() => {
     if (hudWindow && !hudWindow.isDestroyed()) {
       hudWindow.webContents.send('backup-saved')
     }
@@ -413,7 +436,9 @@ app.whenReady().then(() => {
 
   // IPC listener for Copying snippet to clipboard
   ipcMain.on('copy-to-clipboard', (_event, text) => {
-    if (text) {
+    // Untrusted renderer input: a non-string made clipboard.writeText throw
+    // inside the main process, which Electron surfaces as a crash dialog.
+    if (typeof text === 'string' && text.length > 0 && text.length <= MAX_CLIPBOARD_CHARS) {
       clipboard.writeText(text)
       statsEngine?.recordRescue('clipboard_restore')
     }
@@ -436,7 +461,8 @@ app.whenReady().then(() => {
 
   ipcMain.on('create-checkpoint', (event, label) => {
     try {
-      const chk = backupEngine.createCheckpoint(label || 'Manual Checkpoint', currentSession)
+      const safeLabel = typeof label === 'string' && label.trim() ? label.trim().slice(0, MAX_LABEL_CHARS) : 'Manual Checkpoint'
+      const chk = backupEngine.createCheckpoint(safeLabel, currentSession)
       event.reply('checkpoint-created-result', {
         success: true,
         checkpoint: chk,
@@ -493,7 +519,8 @@ app.whenReady().then(() => {
   })
 
   // IPC listener for Privacy Pause
-  ipcMain.on('toggle-privacy-pause', (event, minutes = 15) => {
+  ipcMain.on('toggle-privacy-pause', (event, rawMinutes) => {
+    const minutes = sanitizePauseMinutes(rawMinutes)
     if (isPaused) {
       isPaused = false
       if (pauseTimeout) clearTimeout(pauseTimeout)
@@ -504,6 +531,9 @@ app.whenReady().then(() => {
       pauseTimeout = setTimeout(() => {
         isPaused = false
         pauseTimeout = null
+        // Auto-resume must also wake the clipboard engine; before, it stayed
+        // paused forever after the timer fired.
+        if (clipboardEngine) clipboardEngine.setPaused(false)
         if (hudWindow && !hudWindow.isDestroyed()) {
           hudWindow.webContents.send('pause-state-changed', { isPaused: false })
         }

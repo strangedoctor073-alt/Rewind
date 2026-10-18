@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.daemon.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.daemon.build.tsbuildinfo",
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "outDir": "./dist-daemon",
+    "rootDir": ".",
+    "sourceMap": true
+  },
+  "include": ["daemon"],
+  "exclude": ["daemon/**/__tests__/**"]
+}

@@ -106,7 +106,7 @@ export class FilesystemWatcher {
       const watcher = fs.watch(
         absPath,
         { recursive: true, persistent: false },
-        (event, filename) => {
+        (_event, filename) => {
           if (!filename) return;
           const fullPath = path.join(absPath, filename).replace(/\0+$/, '').trim();
           this._scheduleSnapshot(fullPath);

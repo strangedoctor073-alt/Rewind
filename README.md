@@ -20,7 +20,14 @@
 
 ---
 
-## What's New in REWIND v2.0 🚀
+## What's New in REWIND v5.0 ⚡
+
+- **Workspace Time Machine**: from any moment, reopen the VS Code / Cursor files, Windows Terminal directories and browser tabs you had open, with windows placed back where they were (clamped to your current monitors). `rewind resurrect <momentId> --dry-run` previews it; the dashboard has **⚡ Resurrect Workspace** and **Preview** buttons.
+- **Dashboard now talks to the daemon**: an authenticated loopback HTTP bridge (`127.0.0.1:48292`). Run `rewind token` and paste it via **🔑 Pair with daemon**.
+- **Daemon fixes**: `rewind start` actually starts it (`npm run build:daemon` first), Windows capture works, Ghost Shield applies to capture, retention purges old data.
+- Full list of fixes and known limitations: [CHANGELOG.md](CHANGELOG.md).
+
+## What Was New in REWIND v2.0
 
 - **Headless Background Daemon & CLI (`rewind`)**: Run completely headless in the background with JSON-RPC over Named Pipes and TCP. Full control via `rewind start/stop/status/capture/search/autostart`.
 - **Native Framebuffer Capture & 64-bit dHash**: Captures window framebuffers via Win32 `PrintWindow` with gradient difference hashing to eliminate idle duplicate frames.
@@ -47,7 +54,8 @@
 **1. Headless Daemon & Local Storage (`daemon/`)**
 - Runs in the background, recording window switches, active window bounds, and git branch context.
 - Stores historical events in SQLite (`%LOCALAPPDATA%\Rewind\timeline.db`) in WAL mode with FTS5 search.
-- Dual-transport RPC server (`127.0.0.1:48291` and `\\.\pipe\rewind-daemon-rpc`) protected by 256-bit authentication tokens.
+- Dual-transport RPC server (`127.0.0.1:48291` and `\\.\pipe\rewind-daemon-rpc`, newline-delimited JSON-RPC, not HTTP) protected by 256-bit authentication tokens, plus an authenticated HTTP bridge on `127.0.0.1:48292` for the dashboard.
+- Start it with `npm run build:daemon && rewind start` (or `npm run daemon` to run it in the foreground and see errors).
 
 **2. Desktop Time Machine (`desktop/`)**
 - Floating HUD pill expandable to a full Time Machine dashboard via global `Ctrl+Alt+Z`.

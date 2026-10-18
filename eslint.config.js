@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `extension/assets` + `extension/timeline.html` are build output of `npm run build:extension`.
+  globalIgnores(['dist', 'extension/assets']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -18,5 +19,27 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+  },
+  {
+    // The daemon is a Node process, not browser code.
+    files: ['daemon/**/*.ts'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    // Hand-written JavaScript: Electron main/preload, CLI, extension scripts.
+    // Previously never linted, which is how dead code and unused imports built up.
+    files: ['desktop/**/*.{js,cjs}', 'bin/**/*.js', 'extension/**/*.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser, chrome: 'readonly' },
+    },
+  },
+  {
+    files: ['**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs' },
   },
 ])

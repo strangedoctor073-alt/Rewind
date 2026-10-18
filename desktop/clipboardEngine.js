@@ -116,7 +116,7 @@ export class ClipboardEngine {
     if (!text) return true
     // High-entropy token or private key markers
     if (/BEGIN (?:[A-Z0-9_-]+ )*(?:PRIVATE )?KEY/i.test(text)) return true
-    if (/bearer [a-zA-Z0-9_\-\.]{20,}/i.test(text)) return true
+    if (/bearer [a-zA-Z0-9_.-]{20,}/i.test(text)) return true
     if (/(ghp_|gho_|xoxb-|sk_live_|AIza)[a-zA-Z0-9_]{16,}/i.test(text)) return true
     // Standard credit card regex
     if (/\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\b/.test(text.replace(/[\s-]/g, ''))) return true

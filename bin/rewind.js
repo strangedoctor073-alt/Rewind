@@ -2,15 +2,16 @@
 
 /**
  * REWIND CLI Control Suite
- * Subcommands: start | stop | status | search | undo | pause | export | help
+ * Subcommands: start | stop | status | token | search | resurrect | undo | pause | export | help
  *
  * Communicates with the daemon via Named Pipe using NDJSON JSON-RPC 2.0.
  */
 
 import { createConnection } from 'node:net'
-import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { spawn, execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 /* ── ANSI Colors ────────────────────────────────────────────────── */
 
@@ -122,25 +123,46 @@ function sendRpcCommand(method, params = {}) {
 
 /* ── Subcommands ────────────────────────────────────────────────── */
 
+/** Compiled daemon entrypoint produced by `npm run build:daemon`. */
+function daemonEntryPath() {
+  return join(dirname(fileURLToPath(import.meta.url)), '..', 'dist-daemon', 'daemon', 'main.js')
+}
+
 async function cmdStart() {
   console.log(`${CYAN}↶ REWIND Daemon starting...${RESET}`)
+  const entry = daemonEntryPath()
+  // The old code spawned `node --import tsx daemon/index.ts`: tsx was never a
+  // dependency, and index.ts only exports a class, so nothing ever ran.
+  if (!existsSync(entry)) {
+    console.error(`${RED}✗ Daemon is not built. Run: npm run build:daemon${RESET}`)
+    process.exit(1)
+  }
   try {
-    // Spawn daemon as detached background process
-    const daemonPath = new URL('../daemon/index.ts', import.meta.url).pathname
-    // On Windows, strip leading slash from file URL pathname
-    const resolved = process.platform === 'win32' ? daemonPath.slice(1) : daemonPath
-    const child = spawn(process.execPath, ['--import', 'tsx', resolved], {
+    const child = spawn(process.execPath, [entry], {
       detached: true,
       stdio: 'ignore',
       env: { ...process.env },
     })
     child.unref()
-    console.log(`${GREEN}✓ Daemon spawned (PID: ${child.pid})${RESET}`)
-    console.log(`${DIM}  Use 'rewind status' to check.${RESET}`)
+    console.log(`${DIM}  Spawned PID ${child.pid}; waiting for it to answer...${RESET}`)
   } catch (err) {
     console.error(`${RED}✗ Failed to start daemon: ${err.message}${RESET}`)
     process.exit(1)
   }
+
+  // Detached + stdio ignored means a crash is invisible, so confirm it came up.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    try {
+      await sendRpcCommand('daemon.status')
+      console.log(`${GREEN}✓ Daemon is running.${RESET} ${DIM}Use 'rewind status' for details.${RESET}`)
+      return
+    } catch {
+      // not up yet
+    }
+  }
+  console.error(`${RED}✗ The daemon did not respond. Run it in the foreground to see the error:${RESET}\n  node "${entry}"`)
+  process.exit(1)
 }
 
 async function cmdStop() {
@@ -163,6 +185,47 @@ async function cmdStatus() {
     console.log(`  ${CYAN}Uptime:${RESET}   ${uptimeMin} min (${status.uptime}s)`)
     console.log(`  ${CYAN}Moments:${RESET}  ${status.momentCount}`)
     console.log(`  ${CYAN}Database:${RESET} ${DIM}${status.dbPath}${RESET}`)
+  } catch (err) {
+    console.error(`${RED}✗ ${err.message}${RESET}`)
+    process.exit(1)
+  }
+}
+
+async function cmdToken() {
+  const token = readAuthToken()
+  if (!token) {
+    console.error(`${RED}✗ No auth token found. Is the daemon running?${RESET}`)
+    process.exit(1)
+  }
+  console.error(`${YELLOW}This token grants full control of the daemon. Paste it only into the REWIND dashboard.${RESET}`)
+  console.log(token)
+}
+
+/** Parse `rewind resurrect <momentId> [--dry-run]` arguments. */
+function parseResurrectArgs(args) {
+  const dryRun = args.includes('--dry-run')
+  const momentId = args.find((a) => !a.startsWith('--'))
+  return { momentId, dryRun }
+}
+
+async function cmdResurrect(args) {
+  const { momentId, dryRun } = parseResurrectArgs(args)
+  if (!momentId) {
+    console.error(`${RED}✗ Usage: rewind resurrect <momentId> [--dry-run]${RESET}`)
+    process.exit(1)
+  }
+  try {
+    const report = await sendRpcCommand('timeline.resurrectWorkspace', { momentId, dryRun })
+    console.log(`${BOLD}↶ Workspace ${dryRun ? 'plan' : 'resurrection'} for moment ${report.momentId}${RESET}`)
+    console.log(`${DIM}${'─'.repeat(60)}${RESET}`)
+    const icon = { launched: `${GREEN}✓`, planned: `${CYAN}•`, skipped: `${YELLOW}–`, failed: `${RED}✗` }
+    for (const r of report.results) {
+      console.log(`  ${icon[r.status] ?? '?'}${RESET} ${r.label}`)
+      console.log(`    ${DIM}${r.detail}${RESET}`)
+    }
+    if (report.results.length === 0) console.log(`  ${YELLOW}Nothing resurrectable was found around that moment.${RESET}`)
+    const sum = report.summary
+    console.log(`${DIM}launched ${sum.launched} · planned ${sum.planned} · skipped ${sum.skipped} · failed ${sum.failed}${RESET}`)
   } catch (err) {
     console.error(`${RED}✗ ${err.message}${RESET}`)
     process.exit(1)
@@ -210,7 +273,12 @@ async function cmdUndo() {
 
 async function cmdPause(minutes) {
   try {
-    const params = minutes ? { minutes: parseInt(minutes, 10) } : {}
+    const parsed = minutes ? parseInt(minutes, 10) : undefined
+    if (minutes && !Number.isFinite(parsed)) {
+      console.error(`${RED}✗ Usage: rewind pause [minutes]${RESET}`)
+      process.exit(1)
+    }
+    const params = parsed ? { minutes: parsed } : {}
     const result = await sendRpcCommand('daemon.pause', params)
     if (result.paused) {
       const msg = result.resumesIn ? ` Resumes in ${result.resumesIn}.` : ''
@@ -259,14 +327,16 @@ async function cmdAutostart(action) {
     return
   }
 
-  const { execSync } = await import('node:child_process')
   const regKey = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
-  const appPath = `"${process.execPath}" "${join(process.cwd(), 'bin', 'rewind.js')}" start`
+  // Resolve relative to this file, not the caller's cwd (the old value broke
+  // whenever `rewind autostart enable` was run from another directory), and
+  // pass argv directly instead of building a shell string.
+  const appPath = `"${process.execPath}" "${fileURLToPath(import.meta.url)}" start`
 
   switch (action) {
     case 'enable': {
       try {
-        execSync(`reg add "${regKey}" /v "REWIND" /t REG_SZ /d ${appPath} /f`, { stdio: 'pipe' })
+        execFileSync('reg', ['add', regKey, '/v', 'REWIND', '/t', 'REG_SZ', '/d', appPath, '/f'], { stdio: 'pipe' })
         console.log(`${GREEN}✓ REWIND registered to start automatically on Windows login.${RESET}`)
       } catch (err) {
         console.error(`${RED}✗ Failed to enable autostart: ${err.message}${RESET}`)
@@ -276,7 +346,7 @@ async function cmdAutostart(action) {
     }
     case 'disable': {
       try {
-        execSync(`reg delete "${regKey}" /v "REWIND" /f`, { stdio: 'pipe' })
+        execFileSync('reg', ['delete', regKey, '/v', 'REWIND', '/f'], { stdio: 'pipe' })
         console.log(`${GREEN}✓ REWIND removed from Windows startup registry.${RESET}`)
       } catch {
         console.log(`${YELLOW}ℹ REWIND was not registered in startup.${RESET}`)
@@ -286,7 +356,7 @@ async function cmdAutostart(action) {
     case 'status':
     default: {
       try {
-        const out = execSync(`reg query "${regKey}" /v "REWIND"`, { encoding: 'utf-8', stdio: 'pipe' })
+        const out = execFileSync('reg', ['query', regKey, '/v', 'REWIND'], { encoding: 'utf-8', stdio: 'pipe' })
         console.log(`${GREEN}● Autostart is ENABLED:${RESET}\n  ${out.trim()}`)
       } catch {
         console.log(`${DIM}○ Autostart is DISABLED.${RESET}`)
@@ -307,6 +377,8 @@ ${CYAN}COMMANDS${RESET}
   ${GREEN}start${RESET}                    Start the REWIND daemon in the background
   ${GREEN}stop${RESET}                     Stop the running daemon
   ${GREEN}status${RESET}                   Show daemon status and statistics
+  ${GREEN}token${RESET}                    Print the daemon auth token (to pair the dashboard)
+  ${GREEN}resurrect${RESET} <momentId> [--dry-run] Reopen the editor files, terminals and browser tabs from a moment
   ${GREEN}capture${RESET}                  Capture active window screenshot on demand
   ${GREEN}search${RESET} <query>           Full-text search across the timeline
   ${GREEN}undo${RESET}                     Trigger universal undo (Ctrl+Z to foreground app)
@@ -320,6 +392,7 @@ ${CYAN}EXAMPLES${RESET}
   ${DIM}rewind capture${RESET}            # Take instant snapshot of current window
   ${DIM}rewind search "login bug"${RESET} # Find moments mentioning "login bug"
   ${DIM}rewind pause 30${RESET}           # Pause recording for 30 minutes
+  ${DIM}rewind resurrect m-123 --dry-run${RESET} # Preview what would be reopened
   ${DIM}rewind autostart enable${RESET}   # Launch on Windows login
   ${DIM}rewind export --branch feat/auth${RESET}
 `)
@@ -335,6 +408,8 @@ async function main() {
     case 'start':     return cmdStart()
     case 'stop':      return cmdStop()
     case 'status':    return cmdStatus()
+    case 'token':     return cmdToken()
+    case 'resurrect': return cmdResurrect(args.slice(1))
     case 'capture':   return cmdCapture()
     case 'search':    return cmdSearch(args.slice(1).join(' '))
     case 'undo':      return cmdUndo()
@@ -354,10 +429,13 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(`${RED}✗ Fatal: ${err.message}${RESET}`)
-  process.exit(1)
-})
+// Only run when executed directly, so tests can import the helpers below.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(`${RED}✗ Fatal: ${err.message}${RESET}`)
+    process.exit(1)
+  })
+}
 
 // Export for testing
-export { sendRpcCommand, printHelp, readAuthToken }
+export { sendRpcCommand, printHelp, readAuthToken, parseResurrectArgs, daemonEntryPath }

@@ -65,7 +65,7 @@ export function initWin32() {
     GetWindowTextLengthW = user32.func('GetWindowTextLengthW', 'int', ['intptr'])
     GetWindowThreadProcessId = user32.func('GetWindowThreadProcessId', 'uint32', ['intptr', '_Out_ uint32*'])
     
-    const RECT = koffi.struct('RECT', RectStruct)
+    koffi.struct('RECT', RectStruct) // registered by name for the `RECT*` signature below
     GetWindowRect = user32.func('GetWindowRect', 'bool', ['intptr', '_Out_ RECT*'])
 
     SetForegroundWindow = user32.func('SetForegroundWindow', 'bool', ['intptr'])

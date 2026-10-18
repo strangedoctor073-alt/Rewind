@@ -7,9 +7,7 @@
 import zlib from 'node:zlib'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
-import path from 'node:path'
 import { spawn } from 'node:child_process'
-import { restoreWindowPosition } from './win32.js'
 
 let spawnFn = spawn
 
@@ -114,7 +112,7 @@ export class StateCaptureEngine {
     const isTerm = this.isTerminal(procLower)
     const appType = isTerm ? 'terminal' : 'generic'
 
-    let statePayload = {}
+    let statePayload
 
     if (isTerm) {
       statePayload = {

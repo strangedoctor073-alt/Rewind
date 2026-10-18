@@ -23,6 +23,12 @@ vi.mock('../db/timelineDb.js', () => {
   const TimelineDatabase = vi.fn(function (this: Record<string, unknown>) {
     this.getMoments = vi.fn(() => [])
     this.searchFts = vi.fn(() => [])
+    this.countMoments = vi.fn(() => 321)
+    this.checkpoint = vi.fn()
+    this.purgeOlderThan = vi.fn(() => ({ removed: 0, screenshotPaths: [] }))
+    this.getMomentById = vi.fn(() => undefined)
+    this.getBrowserEventsBetween = vi.fn(() => [])
+    this.insertMoment = vi.fn()
     this.close = vi.fn()
   }) as unknown as new (...args: unknown[]) => { getMoments: () => []; searchFts: () => []; close: () => void }
   return { TimelineDatabase }
@@ -36,6 +42,15 @@ vi.mock('../rpc/rpcServer.js', () => {
     this.listening = true
   }) as unknown as new (...args: unknown[]) => { start: () => Promise<void>; stop: () => Promise<void> }
   return { RpcServer }
+})
+
+// HttpBridge: class mock so the suite never binds a real port
+vi.mock('../rpc/httpBridge.js', () => {
+  const HttpBridge = vi.fn(function (this: Record<string, unknown>) {
+    this.start = vi.fn().mockResolvedValue(undefined)
+    this.stop = vi.fn().mockResolvedValue(undefined)
+  }) as unknown as new (...args: unknown[]) => { start: () => Promise<void>; stop: () => Promise<void> }
+  return { HttpBridge }
 })
 
 vi.mock('../rpc/auth.js', () => ({
@@ -178,6 +193,24 @@ describe('RewindDaemon RPC method dispatch', () => {
     const r2 = await dispatch('daemon.pause')
     expect(r2.paused).toBe(false)
     expect(daemon.isPaused()).toBe(false)
+  })
+
+  it('daemon.status reports the real moment count, not a page of rows', async () => {
+    const status = await dispatch('daemon.status')
+    expect(status.momentCount).toBe(321)
+  })
+
+  it('daemon.pause accepts an explicit state and ignores nonsense minutes', async () => {
+    const r1 = await dispatch('daemon.pause', { paused: true, minutes: 'abc' })
+    expect(r1).toEqual({ paused: true, resumesIn: null })
+    const r2 = await dispatch('daemon.pause', { paused: true, minutes: -5 })
+    expect(r2.resumesIn).toBe('1 minutes') // clamped to the 1 minute minimum
+    const r3 = await dispatch('daemon.pause', { paused: false })
+    expect(r3).toEqual({ paused: false, resumesIn: null })
+  })
+
+  it('timeline.resurrectWorkspace rejects a malformed moment id', async () => {
+    await expect(dispatch('timeline.resurrectWorkspace', { momentId: '../../etc/passwd' })).rejects.toMatchObject({ code: -32602 })
   })
 
   it('timeline.search dispatches to db.searchFts', async () => {

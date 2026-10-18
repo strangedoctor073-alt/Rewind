@@ -142,6 +142,11 @@ export class TimelineDatabase {
   }
 
   public insertMoment(moment: DbMoment): void {
+    // Row + FTS entry must land together or not at all.
+    this.db.transaction(() => this.insertMomentRow(moment))()
+  }
+
+  private insertMomentRow(moment: DbMoment): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO moments (
         id, timestamp, app_name, window_title, process_path, pid,
@@ -268,7 +273,11 @@ export class TimelineDatabase {
   }
 
   public getMoments(options: { limit?: number; offset?: number; since?: number; until?: number; app?: string } = {}): Record<string, unknown>[] {
-    const { limit = 50, offset = 0, since, until, app } = options
+    const { since, until, app } = options
+    // Callers pass untrusted RPC params: clamp so a huge/negative/NaN limit
+    // cannot dump the whole table or make SQLite throw.
+    const limit = clampInt(options.limit, 50, 1, 1000)
+    const offset = clampInt(options.offset, 0, 0, Number.MAX_SAFE_INTEGER)
     const conditions: string[] = []
     const params: (string | number)[] = []
 
@@ -314,7 +323,79 @@ export class TimelineDatabase {
     }
   }
 
+  /** Total number of stored moments (cheap; does not load rows). */
+  public countMoments(): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM moments').get() as { n: number }
+    return row.n
+  }
+
+  /**
+   * Browser interaction events with `since <= timestamp <= until`, oldest first.
+   * Used by workspace resurrection to find which tabs were open at a moment.
+   */
+  public getBrowserEventsBetween(since: number, until: number, limit = 500): DbBrowserEvent[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, moment_id AS momentId, tab_id AS tabId, url, page_title AS pageTitle,
+                event_kind AS eventKind, selector, scroll_x AS scrollX, scroll_y AS scrollY, timestamp
+         FROM browser_events
+         WHERE timestamp >= ? AND timestamp <= ?
+         ORDER BY timestamp ASC
+         LIMIT ?`,
+      )
+      .all(since, until, clampInt(limit, 500, 1, 5000)) as Array<Record<string, unknown>>
+    return rows.map((r) => ({
+      id: String(r.id),
+      momentId: r.momentId == null ? undefined : String(r.momentId),
+      tabId: r.tabId == null ? undefined : Number(r.tabId),
+      url: String(r.url),
+      pageTitle: r.pageTitle == null ? undefined : String(r.pageTitle),
+      eventKind: r.eventKind as DbBrowserEvent['eventKind'],
+      selector: r.selector == null ? undefined : String(r.selector),
+      scrollX: r.scrollX == null ? undefined : Number(r.scrollX),
+      scrollY: r.scrollY == null ? undefined : Number(r.scrollY),
+      timestamp: Number(r.timestamp),
+    }))
+  }
+
+  /**
+   * Retention: delete everything older than `cutoffMs` (epoch ms).
+   * Without this the database grew without bound once capture is live.
+   * Returns the screenshot files that belonged to the deleted moments so the
+   * caller can remove them from disk too.
+   */
+  public purgeOlderThan(cutoffMs: number): { removed: number; screenshotPaths: string[] } {
+    return this.db.transaction(() => {
+      const old = this.db
+        .prepare('SELECT id, screenshot_path AS screenshotPath FROM moments WHERE timestamp < ?')
+        .all(cutoffMs) as Array<{ id: string; screenshotPath: string | null }>
+
+      // FTS5 rows are not covered by ON DELETE CASCADE.
+      this.db
+        .prepare('DELETE FROM timeline_fts WHERE moment_id IN (SELECT id FROM moments WHERE timestamp < ?)')
+        .run(cutoffMs)
+      this.db.prepare('DELETE FROM moments WHERE timestamp < ?').run(cutoffMs)
+      this.db.prepare('DELETE FROM browser_events WHERE timestamp < ?').run(cutoffMs)
+      this.db.prepare('DELETE FROM clipboard_history WHERE timestamp < ?').run(cutoffMs)
+
+      return {
+        removed: old.length,
+        screenshotPaths: old.map((m) => m.screenshotPath).filter((p): p is string => !!p),
+      }
+    })()
+  }
+
+  /** Fold the WAL into the main database file so it cannot grow unbounded. */
+  public checkpoint(): void {
+    this.db.pragma('wal_checkpoint(PASSIVE)')
+  }
+
   public close(): void {
     this.db.close()
   }
+}
+
+function clampInt(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, Math.trunc(value)))
 }

@@ -28,8 +28,11 @@ export function writeAuthToken(token: string, tokenPath?: string): void {
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
 
+  // 0o600: owner read/write only (POSIX). On Windows the per-user
+  // %LOCALAPPDATA% ACL already applies; the mode is simply ignored there.
+  // Matches desktop/keyStore.js, which also writes secrets with 0o600.
   const tmpPath = filePath + '.tmp'
-  fs.writeFileSync(tmpPath, token, 'utf-8')
+  fs.writeFileSync(tmpPath, token, { encoding: 'utf-8', mode: 0o600 })
   fs.renameSync(tmpPath, filePath)
 }
 

@@ -22,6 +22,7 @@ import { TelemetryBar } from './telemetry/TelemetryBar'
 import { audioEngine } from '../audio/synth'
 import type { DashboardMoment, DashboardViewMode, TelemetryStats } from './types'
 import { useDaemonRpc } from './hooks/useDaemonRpc'
+import { resurrectWorkspace } from './hooks/daemonClient'
 
 const initialMockMoments: DashboardMoment[] = [
   {
@@ -82,7 +83,7 @@ const initialMockMoments: DashboardMoment[] = [
 
 export const GrandDashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<DashboardViewMode>('flow')
-  const { isConnected, moments, stats: liveStats } = useDaemonRpc(initialMockMoments)
+  const { isConnected, isLive, needsToken, moments, stats: liveStats, pair } = useDaemonRpc(initialMockMoments)
   const [selectedMomentId, setSelectedMomentId] = useState<string>('m3')
   const [isOmniboxOpen, setIsOmniboxOpen] = useState(false)
   const [isSoundMuted, setIsSoundMuted] = useState(audioEngine.isMuted())
@@ -226,6 +227,19 @@ export const GrandDashboard: React.FC = () => {
           >
             {isConnected ? '● LIVE DAEMON' : '○ DEMO MODE'}
           </span>
+          {isConnected && needsToken && (
+            <button
+              className="gd-nav-btn"
+              style={{ marginLeft: 8 }}
+              title="Run `rewind token` in a terminal and paste the result"
+              onClick={() => {
+                const token = window.prompt('Paste the daemon token (run: rewind token)')
+                if (token && token.trim()) pair(token)
+              }}
+            >
+              🔑 Pair with daemon
+            </button>
+          )}
         </div>
 
         {/* View Switcher Pills */}
@@ -329,7 +343,11 @@ export const GrandDashboard: React.FC = () => {
         </div>
 
         {/* Deep Moment Inspector Drawer */}
-        <InspectorDrawer moment={selectedMoment} onJump={handleJumpMoment} />
+        <InspectorDrawer
+          moment={selectedMoment}
+          onJump={handleJumpMoment}
+          onResurrect={isLive ? (m, dryRun) => resurrectWorkspace(m.id, dryRun) : undefined}
+        />
       </div>
 
       {/* Bottom Telemetry Bar */}

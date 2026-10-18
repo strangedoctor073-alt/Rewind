@@ -40,3 +40,12 @@ extension/assets/
 *.njsproj
 *.sln
 *.sw?
+
+# Compiled daemon (npm run build:daemon)
+dist-daemon
+
+# Agent roadmaps and instructions
+AGENTS.md
+ROADMAP.md
+.kilo/
+*.pdf

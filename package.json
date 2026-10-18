@@ -1,6 +1,6 @@
 {
   "name": "rewind",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "private": true,
   "description": "Local-first window-activity timeline, universal-undo hotkey and browser interaction recorder for Windows and Chromium.",
   "license": "MIT",
@@ -32,6 +32,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:daemon": "tsc -p tsconfig.daemon.build.json",
+    "daemon": "npm run build:daemon && node dist-daemon/daemon/main.js",
     "build:extension": "tsc -b tsconfig.extension.json && vite build --config vite.extension.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",

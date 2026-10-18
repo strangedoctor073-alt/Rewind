@@ -838,7 +838,7 @@ function updatePauseUI(paused) {
   }
 }
 
-ipcRenderer.on('backup-saved', (_event, _info) => {
+ipcRenderer.on('backup-saved', () => {
   countdown = 20
   backupTimer.textContent = 'Saved'
   backupBadge.classList.add('backup-saved')
