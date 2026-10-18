@@ -20,12 +20,23 @@
 
 ---
 
-## What's New in REWIND v5.0 ⚡
+## What's New in REWIND v5.2 🚀
+
+- **Playwright Macro Exporter**: `rewind macro export --format playwright --output test.ts` — turn any recorded browser session into a runnable Playwright test. Secrets auto-masked as `process.env.*`.
+- **PowerShell DevOps Exporter**: `rewind macro export --format powershell --output script.ps1` — same recording, emitted as a `.ps1` with elevation check and secure env-var prompts.
+- **Focus & Productivity Analytics**: `rewind status` now shows **Focus %** and **Context Switches/hr** live from the SQLite timeline. Dashboard telemetry also polls the new `analytics.telemetryStats` RPC.
+- **AES-256-GCM Encrypted Vaults**: `rewind vault create <out.vault>` / `rewind vault restore <out.vault>` — offline, air-gapped backup with PBKDF2 key derivation and gzip compression. No cloud, no RPC.
+- Full list of changes: [CHANGELOG.md](CHANGELOG.md).
+
+> **Versioning**: releases follow an even-minor scheme — `v5.0 → v5.2 → v5.4 → …` — all accumulating into a full **v5** release.
+
+## What's New in REWIND v5.0
 
 - **Workspace Time Machine**: from any moment, reopen the VS Code / Cursor files, Windows Terminal directories and browser tabs you had open, with windows placed back where they were (clamped to your current monitors). `rewind resurrect <momentId> --dry-run` previews it; the dashboard has **⚡ Resurrect Workspace** and **Preview** buttons.
 - **Dashboard now talks to the daemon**: an authenticated loopback HTTP bridge (`127.0.0.1:48292`). Run `rewind token` and paste it via **🔑 Pair with daemon**.
 - **Daemon fixes**: `rewind start` actually starts it (`npm run build:daemon` first), Windows capture works, Ghost Shield applies to capture, retention purges old data.
 - Full list of fixes and known limitations: [CHANGELOG.md](CHANGELOG.md).
+
 
 ## What Was New in REWIND v2.0
 

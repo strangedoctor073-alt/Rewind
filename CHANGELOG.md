@@ -1,5 +1,21 @@
 # Changelog
 
+## 5.2.0 - Autonomous Flow & Vaults
+
+### Added
+- **Playwright Macro Exporter** (`daemon/macros/playwright/playwrightExporter.ts`, RPC `macro.export`, `rewind macro export`): converts a recorded browser session into a runnable Playwright TypeScript test. Navigates, clicks, fills, scrolls; masks secrets as `process.env.*`; optional `expect()` assertions on every interaction. Accepts `--format`, `--output`, `--name` flags.
+- **PowerShell DevOps Macro Exporter** (`daemon/macros/devops/powershellExporter.ts`): emits a `.ps1` script from the same browser recording. Elevation check, idempotent structure, sensitive env vars masked via `Read-Host -AsSecureString`. Select with `--format powershell`.
+- **Focus & Productivity Analytics Engine** (`daemon/analytics/focusEngine.ts`, RPC `analytics.focusReport` / `analytics.telemetryStats`): computes Deep Focus Score (0–100), Context-Switch Velocity (switches/hr), distraction spike detection, per-app heatmap and hourly activity heatmap from the SQLite timeline. `rewind status` now shows Focus % and Context Switches/hr. Dashboard `useDaemonRpc` polls `analytics.telemetryStats` alongside the timeline.
+- **Zero-Knowledge AES-256-GCM Encrypted Vaults** (`daemon/vault/vaultEngine.ts`, `rewind vault create|restore`): offline-only CLI vault for backing up and restoring timeline data. AES-256-GCM + PBKDF2-SHA-256 (100 k iterations, 32-byte salt, 12-byte IV, 16-byte auth tag), gzip compression, atomic write via `.tmp` rename, magic header `REWIND_VAULT_V1\0`. No RPC exposure — vault operations are intentionally air-gapped.
+
+### Fixed
+- `extension/__tests__/background.test.ts`: test "closes out a recording when its tab is closed" had a race between `saveRecording()` setting `active: false` and the subsequent `chrome.storage.local.remove(sessionPointerKey)` (fake store has a `setTimeout(0)` per op). Polling loop now waits for both conditions before asserting. Added `20_000 ms` timeout to match the other polling tests.
+
+### Versioning note
+From this release onward, increments follow an **even-minor** scheme under the v5 umbrella: `5.0 → 5.2 → 5.4 → 5.6 → … → 5.10 → 5.10.1 …`. All even-minor releases accumulate into a full **v5** release.
+
+---
+
 ## 5.0.0 - Deep Resurrection
 
 ### Added
