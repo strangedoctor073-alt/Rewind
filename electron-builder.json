@@ -6,6 +6,7 @@
   "directories": {
     "output": "dist-electron"
   },
+  "npmRebuild": false,
   "files": [
     "desktop/**/*",
     "dist/**/*",
