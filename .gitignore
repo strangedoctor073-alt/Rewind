@@ -44,6 +44,9 @@ extension/assets/
 # Compiled daemon (npm run build:daemon)
 dist-daemon
 
+# Packaged installer output
+dist-electron
+
 # Agent roadmaps and instructions
 AGENTS.md
 ROADMAP.md

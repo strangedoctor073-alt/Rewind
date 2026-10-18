@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.rewind.timemachine",
+  "productName": "REWIND",
+  "copyright": "Copyright © 2026 REWIND Authors",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "files": [
+    "desktop/**/*",
+    "dist/**/*",
+    "dist-daemon/**/*",
+    "bin/**/*",
+    "package.json",
+    "!**/__tests__/**",
+    "!desktop/tauri/**"
+  ],
+  "extraMetadata": {
+    "main": "desktop/main.js"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "REWIND Time Machine",
+    "uninstallDisplayName": "REWIND Time Machine",
+    "runAfterFinish": true,
+    "deleteAppDataOnUninstall": false
+  },
+  "portable": {
+    "artifactName": "${productName}-${version}-portable.${ext}"
+  },
+  "asarUnpack": [
+    "**/node_modules/better-sqlite3/**",
+    "**/node_modules/koffi/**"
+  ]
+}

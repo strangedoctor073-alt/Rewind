@@ -1,5 +1,17 @@
 # Changelog
 
+## 5.6.0 - NSIS Distribution & Packaging
+
+### Added
+- **NSIS Windows Installer Pipeline** (`electron-builder.json`, `npm run pack`, `npm run dist`):
+  - Nullsoft Scriptable Install System (NSIS) packaging targeting x64 Windows systems.
+  - Dual install modes: per-user (unprivileged, non-admin default to `%LOCALAPPDATA%`) and per-machine option.
+  - Automatic desktop shortcut and Start Menu program entry creation with clean uninstaller hooks.
+  - Asar unpacking configured for native FFI and C++ bindings (`better-sqlite3`, `koffi`).
+  - Standalone zero-installation portable binary target (`${productName}-${version}-portable.exe`).
+
+---
+
 ## 5.4.0 - Telemetry & Provenance
 
 ### Added
