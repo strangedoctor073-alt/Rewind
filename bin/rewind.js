@@ -303,6 +303,45 @@ async function cmdExport(branch) {
   }
 }
 
+async function cmdMacro(args) {
+  const action = args[0]?.toLowerCase()
+  if (action !== 'export') {
+    console.error(`${RED}Usage: rewind macro export [--format playwright] [--output <file>] [--name <testName>]${RESET}`)
+    process.exit(1)
+  }
+
+  const formatIdx = args.indexOf('--format')
+  const format = formatIdx >= 0 ? args[formatIdx + 1] : 'playwright'
+
+  const outputIdx = args.indexOf('--output')
+  const outputPath = outputIdx >= 0 ? args[outputIdx + 1] : null
+
+  const nameIdx = args.indexOf('--name')
+  const testName = nameIdx >= 0 ? args[nameIdx + 1] : undefined
+
+  try {
+    const result = await sendRpcCommand('macro.export', {
+      format,
+      testName,
+    })
+
+    if (outputPath) {
+      const { writeFileSync } = await import('node:fs')
+      writeFileSync(outputPath, result.code, 'utf-8')
+      console.log(`${GREEN}✓ Exported ${result.format} macro (${result.stepsCount} steps) to ${outputPath}${RESET}`)
+      if (result.secretsUsed?.length) {
+        console.log(`  ${YELLOW}Secrets parameterized:${RESET} ${result.secretsUsed.join(', ')}`)
+      }
+    } else {
+      console.log(result.code)
+    }
+  } catch (err) {
+    console.error(`${RED}✗ Macro export failed: ${err.message}${RESET}`)
+    process.exit(1)
+  }
+}
+
+
 async function cmdCapture() {
   try {
     const result = await sendRpcCommand('timeline.captureNow', {})
@@ -385,6 +424,7 @@ ${CYAN}COMMANDS${RESET}
   ${GREEN}pause${RESET} [minutes]          Toggle recording pause (optional auto-resume)
   ${GREEN}autostart${RESET} <enable|disable|status> Manage Windows startup registration
   ${GREEN}export${RESET} [--branch <name>] Export provenance bundle for AI PR review
+  ${GREEN}macro${RESET} export [options]        Export browser interactions as Playwright test script
   ${GREEN}help${RESET}                     Show this help message
 
 ${CYAN}EXAMPLES${RESET}
@@ -393,6 +433,7 @@ ${CYAN}EXAMPLES${RESET}
   ${DIM}rewind search "login bug"${RESET} # Find moments mentioning "login bug"
   ${DIM}rewind pause 30${RESET}           # Pause recording for 30 minutes
   ${DIM}rewind resurrect m-123 --dry-run${RESET} # Preview what would be reopened
+  ${DIM}rewind macro export --output ./flow.spec.ts${RESET} # Export Playwright test
   ${DIM}rewind autostart enable${RESET}   # Launch on Windows login
   ${DIM}rewind export --branch feat/auth${RESET}
 `)
@@ -415,6 +456,7 @@ async function main() {
     case 'undo':      return cmdUndo()
     case 'pause':     return cmdPause(args[1])
     case 'autostart': return cmdAutostart(args[1]?.toLowerCase())
+    case 'macro':     return cmdMacro(args.slice(1))
     case 'export': {
       const branchIdx = args.indexOf('--branch')
       return cmdExport(branchIdx >= 0 ? args[branchIdx + 1] : undefined)
@@ -438,4 +480,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 }
 
 // Export for testing
-export { sendRpcCommand, printHelp, readAuthToken, parseResurrectArgs, daemonEntryPath }
+export { sendRpcCommand, printHelp, readAuthToken, parseResurrectArgs, daemonEntryPath, cmdMacro }

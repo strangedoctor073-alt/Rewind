@@ -24,6 +24,8 @@ import { WorkspaceResurrector } from './resurrect/workspaceResurrector.js'
 import { createDefaultLauncher } from './resurrect/launcher.js'
 import { WindowGeometryRestorer, type WindowDriver } from './resurrect/geometry/windowGeometryRestorer.js'
 import { createWin32WindowDriver } from './resurrect/geometry/win32Driver.js'
+import { PlaywrightExporter } from './macros/playwright/playwrightExporter.js'
+import type { MacroBrowserEvent } from './macros/types.js'
 import type { Launcher } from './resurrect/types.js'
 
 export interface DaemonConfig {
@@ -316,6 +318,35 @@ export class RewindDaemon {
         if (!this.captureEngine) return { captured: false, error: 'Capture engine not running' }
         const frame = await this.captureEngine.captureActiveWindow()
         return { captured: !!frame, frame }
+      }
+
+      case 'macro.export': {
+        const format = params.format === 'powershell' ? 'powershell' : 'playwright'
+        let events: MacroBrowserEvent[] = []
+        if (Array.isArray(params.events)) {
+          events = params.events as MacroBrowserEvent[]
+        } else if (this.db) {
+          const since = typeof params.since === 'number' ? params.since : Date.now() - 3600000
+          const until = typeof params.until === 'number' ? params.until : Date.now()
+          const rows = this.db.getBrowserEventsBetween(since, until, 500)
+          events = rows.map((r) => ({
+            id: r.id,
+            timestamp: r.timestamp,
+            kind: r.eventKind,
+            url: r.url,
+            selector: r.selector,
+            scrollX: r.scrollX,
+            scrollY: r.scrollY,
+          }))
+        }
+        if (format === 'playwright') {
+          return PlaywrightExporter.export(events, {
+            testName: typeof params.testName === 'string' ? params.testName : undefined,
+            defaultTimeoutMs: typeof params.timeoutMs === 'number' ? params.timeoutMs : undefined,
+            generateAssertions: Boolean(params.generateAssertions),
+          })
+        }
+        throw { code: -32602, message: `Unsupported export format "${format}"` }
       }
 
       default:

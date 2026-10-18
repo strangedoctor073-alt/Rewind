@@ -235,6 +235,20 @@ describe('RewindDaemon RPC method dispatch', () => {
     expect(res.frame).toMatchObject({ id: 'mock-cap-1', hwnd: 12345 })
   })
 
+  it('macro.export generates playwright script from events', async () => {
+    const res = (await dispatch('macro.export', {
+      format: 'playwright',
+      events: [
+        { kind: 'navigate', url: 'https://example.com' },
+        { kind: 'click', selector: '#btn' },
+      ],
+    })) as { format: string; stepsCount: number; code: string }
+    expect(res.format).toBe('playwright')
+    expect(res.stepsCount).toBe(2)
+    expect(res.code).toContain('await page.goto("https://example.com"')
+    expect(res.code).toContain('await page.locator("#btn").click()')
+  })
+
   it('unknown method throws METHOD_NOT_FOUND error', async () => {
     await expect(dispatch('bogus.method')).rejects.toMatchObject({ code: -32601 })
   })

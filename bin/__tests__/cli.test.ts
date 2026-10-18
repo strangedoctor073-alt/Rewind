@@ -2,11 +2,12 @@
 import { describe, it, expect } from 'vitest'
 import path from 'node:path'
 // @ts-expect-error bin/rewind.js is plain JavaScript with no type declarations
-import { parseResurrectArgs, daemonEntryPath } from '../rewind.js'
+import { parseResurrectArgs, daemonEntryPath, cmdMacro } from '../rewind.js'
 
 describe('CLI helpers', () => {
   it('importing the module does not run the CLI', () => {
     expect(typeof parseResurrectArgs).toBe('function')
+    expect(typeof cmdMacro).toBe('function')
   })
 
   it('parses resurrect arguments in either order', () => {
