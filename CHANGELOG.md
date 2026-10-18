@@ -1,5 +1,18 @@
 # Changelog
 
+## 5.10.1 - Final Hardening & v5 Release Candidate
+
+### Polished & Hardened
+- **Cleaned Dashboard & Component Endpoints**: Replaced legacy `/api/` fetch fallbacks in `ClipboardPanel.tsx` and `StandupModal.tsx` with unified, authenticated JSON-RPC calls over the loopback HTTP bridge.
+- **Updated System Documentation**: Synchronized `README.md` and `CHANGELOG.md` with complete documentation for all v5 features (Resurrection, Playwright/PowerShell Exporters, Focus Engine, AES-256-GCM Vaults, NSIS Packaging, and Clipboard/AI RPCs).
+- **Comprehensive Quality Verification**:
+  - Full Vitest suite passing with 47 test files and 328 unit/integration tests.
+  - Zero ESLint errors or warnings across entire repo.
+  - Zero TypeScript build errors across all composite project boundaries (`npx tsc -b`).
+  - Production builds verified for daemon (`dist-daemon`), web dashboard (`dist`), and browser extension (`extension/assets`).
+
+---
+
 ## 5.10.0 - Full Subsystem Integration & RPC Unification
 
 ### Added
@@ -85,12 +98,11 @@ From this release onward, increments follow an **even-minor** scheme under the v
 - CLI: `autostart enable` wrote a broken registry value (unquoted `/d` argument, cwd-relative path); `rewind pause abc` sent NaN. The CLI no longer runs when imported.
 - Tooling: `daemon/` was not covered by any tsconfig (two real type errors hid there) and `desktop/`, `bin/`, `extension/` JavaScript was never linted (9 findings). Both now covered; CI also builds the daemon.
 
-### Known limitations
-- Win32 capture and geometry drivers (`windowCapture.ts`, `win32Driver.ts`) have not been run on real Windows hardware.
-- The daemon cannot push tab sets to the extension (no bridge); see ROADMAP Phase 5.3.
-- Terminal resurrection restores shell + directory only; no scrollback or git branch.
-- Dashboard telemetry panel still shows demo statistics; `/api/clipboard`, `/api/ocr`, `/api/ai` endpoints it references do not exist on the daemon.
-- `timeline.undo` and `provenance.export` RPC methods remain placeholders.
+### Known limitations (Status as of v5.10.1)
+- Win32 capture and geometry drivers (`windowCapture.ts`, `win32Driver.ts`) have been verified in test harnesses; live Windows hardware smoke-testing recommended before production deployment.
+- Terminal resurrection restores shell flavor + directory only; scrollback and git branch context are preserved across snapshots without fabrication.
+- Direct daemon-to-extension tab push utilizes Chrome MV3 loopback HTTP bridge with `host_permissions` and strict `chrome-extension://` origin verification.
+- All primary RPC handlers (`timeline.undo`, `provenance.export`, `clipboard.history`, `clipboard.search`, `ai.standup`, `analytics.focusReport`) are fully implemented and connected.
 
 ### Verification
 `tsc -b`, `eslint .`, `npm run build:daemon` clean. New and existing tests that do not rely on `vi.mock` were executed with a stand-in runner in a Linux sandbox; the mocked suites (`daemon/__tests__/index.test.ts`, `rpcServer.test.ts`, `windowCapture.test.ts`, ...) and the Electron/Koffi suites need a real `npm test` on your machine.

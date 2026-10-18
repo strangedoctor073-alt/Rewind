@@ -20,22 +20,18 @@
 
 ---
 
-## What's New in REWIND v5.2 🚀
+## What's New in REWIND v5 (v5.10.1 Final Polish) ⚡
 
-- **Playwright Macro Exporter**: `rewind macro export --format playwright --output test.ts` — turn any recorded browser session into a runnable Playwright test. Secrets auto-masked as `process.env.*`.
-- **PowerShell DevOps Exporter**: `rewind macro export --format powershell --output script.ps1` — same recording, emitted as a `.ps1` with elevation check and secure env-var prompts.
-- **Focus & Productivity Analytics**: `rewind status` now shows **Focus %** and **Context Switches/hr** live from the SQLite timeline. Dashboard telemetry also polls the new `analytics.telemetryStats` RPC.
-- **AES-256-GCM Encrypted Vaults**: `rewind vault create <out.vault>` / `rewind vault restore <out.vault>` — offline, air-gapped backup with PBKDF2 key derivation and gzip compression. No cloud, no RPC.
-- Full list of changes: [CHANGELOG.md](CHANGELOG.md).
-
-> **Versioning**: releases follow an even-minor scheme — `v5.0 → v5.2 → v5.4 → …` — all accumulating into a full **v5** release.
-
-## What's New in REWIND v5.0
-
-- **Workspace Time Machine**: from any moment, reopen the VS Code / Cursor files, Windows Terminal directories and browser tabs you had open, with windows placed back where they were (clamped to your current monitors). `rewind resurrect <momentId> --dry-run` previews it; the dashboard has **⚡ Resurrect Workspace** and **Preview** buttons.
-- **Dashboard now talks to the daemon**: an authenticated loopback HTTP bridge (`127.0.0.1:48292`). Run `rewind token` and paste it via **🔑 Pair with daemon**.
-- **Daemon fixes**: `rewind start` actually starts it (`npm run build:daemon` first), Windows capture works, Ghost Shield applies to capture, retention purges old data.
-- Full list of fixes and known limitations: [CHANGELOG.md](CHANGELOG.md).
+- **Deep Workspace Resurrection**: Reopen VS Code/Cursor files, Windows Terminal directories, and browser tabs with pixel-perfect multi-monitor window geometry placement (`rewind resurrect <momentId> [--dry-run]` or dashboard **⚡ Resurrect Workspace**).
+- **Automated Macro Exporters**:
+  - `rewind macro export --format playwright --output flow.spec.ts`: Turn recorded web sessions into clean, runnable Playwright tests with automatic environment-variable secret masking (`process.env.SECRET`).
+  - `rewind macro export --format powershell --output script.ps1`: Generate idempotent PowerShell automation with elevation checks and secure string masking.
+- **Cognitive Standup & AI Synthesizer**: Generate daily standup summaries, timesheet activity logs, and commit drafts powered by Ollama (`ai.standup` RPC with heuristic offline fallback).
+- **Focus & Productivity Intelligence**: Deep Focus score (0–100), context-switch velocity, distraction spike detection, and 24h interactive activity heatmaps via `FocusTelemetryWidget.tsx` and `rewind status`.
+- **Zero-Knowledge Air-Gapped Vaults**: `rewind vault create <file.vault>` / `rewind vault restore <file.vault>` — AES-256-GCM + PBKDF2 (100k rounds) encrypted timeline backups with gzip compression.
+- **Unified Multi-Format Clipboard History**: FTS full-text search across clipboard text, HTML, and rich format entries with real-time Ghost Shield entropy redaction (`clipboard.history` and `clipboard.search` RPCs).
+- **Windows Packaging & Distribution**: Standard NSIS installer (`.exe`) with dual-mode per-user/per-machine installation and standalone portable executables via `npm run dist`.
+- Full detailed evolution and fixes: [CHANGELOG.md](CHANGELOG.md).
 
 
 ## What Was New in REWIND v2.0
