@@ -161,6 +161,8 @@ function createDashboardWindow() {
     height: Math.min(820, height - 60),
     title: 'REWIND Studio',
     backgroundColor: '#0a0e17',
+    autoHideMenuBar: true,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'dashboardPreload.cjs'),

@@ -43,7 +43,8 @@
     "shortcutName": "REWIND Time Machine",
     "uninstallDisplayName": "REWIND Time Machine",
     "runAfterFinish": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "artifactName": "${productName}-Setup-${version}.${ext}"
   },
   "portable": {
     "artifactName": "${productName}-${version}-portable.${ext}"
