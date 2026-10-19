@@ -30,6 +30,9 @@ export const TERMINAL_PROCESSES = new Set([
 export const TERMINAL_DISCLAIMER =
   'Note: Prior terminal output, environment, and command history have been restored. Commands already executed on your machine cannot be rolled back.'
 
+const FALLBACK_KEY_SALT = 'rewind_fallback_key_'
+const DEFAULT_WINDOWS_FALLBACK_CWD = process.env.SystemDrive ? `${process.env.SystemDrive}\\` : 'C:\\'
+
 let keyProvider = null
 let warnedLegacyKey = false
 
@@ -55,7 +58,7 @@ function getStorageKey() {
     console.warn('[REWIND] OS secure storage unavailable; state blobs use a weak fallback key.')
   }
   const user = process.env.USERNAME || process.env.USER || 'rewind_local_user'
-  return crypto.createHash('sha256').update(`rewind_fallback_key_${user}`).digest()
+  return crypto.createHash('sha256').update(`${FALLBACK_KEY_SALT}${user}`).digest()
 }
 
 /**
@@ -121,7 +124,7 @@ export class StateCaptureEngine {
         exePath: windowInfo.exePath || 'cmd.exe',
         title: windowInfo.title || '',
         bounds: windowInfo.bounds || null,
-        cwd: windowInfo.cwd || process.env.USERPROFILE || 'C:\\',
+        cwd: windowInfo.cwd || process.env.USERPROFILE || DEFAULT_WINDOWS_FALLBACK_CWD,
         buffer: windowInfo.buffer || '',
         history: Array.isArray(windowInfo.history) ? windowInfo.history : [],
         capturedAt: Date.now(),
@@ -185,7 +188,7 @@ export class StateCaptureEngine {
       if (state.appType === 'terminal') {
         const cwd = state.cwd && fs.existsSync(state.cwd)
           ? state.cwd
-          : (process.env.USERPROFILE || 'C:\\')
+          : (process.env.USERPROFILE || DEFAULT_WINDOWS_FALLBACK_CWD)
 
         let shellExe = state.exePath || (process.platform === 'win32' ? 'cmd.exe' : (process.env.SHELL || '/bin/sh'))
         if (process.platform !== 'win32' && shellExe.toLowerCase().endsWith('.exe')) {

@@ -13,30 +13,32 @@ let currentFilter = 'all'
 let isDownloading = false
 let removeProgressListener = null
 
-// ─── DOM refs ────────────────────────────────────────────────────────────────
-const elVersionList   = document.getElementById('version-list')
-const elLoadingState  = document.getElementById('loading-state')
-const elDetailEmpty   = document.getElementById('detail-empty')
-const elDetailContent = document.getElementById('detail-content')
-const elDetailTag     = document.getElementById('detail-tag')
-const elDetailName    = document.getElementById('detail-name')
-const elDetailMeta    = document.getElementById('detail-meta')
-const elDetailNotes   = document.getElementById('detail-notes')
-const elProgressWrap  = document.getElementById('progress-wrap')
-const elProgressLabel = document.getElementById('progress-label')
-const elProgressFill  = document.getElementById('progress-bar-fill')
-const elProgressPct   = document.getElementById('progress-pct')
-const elBtnLaunch     = document.getElementById('btn-launch')
-const elBtnDownload   = document.getElementById('btn-download')
-const elBtnDelete     = document.getElementById('btn-delete')
-const elNoAsset       = document.getElementById('no-asset-msg')
-const elStatus        = document.getElementById('status-text')
-const elStatusRight   = document.getElementById('statusbar-right')
-const elOfflineBanner = document.getElementById('offline-banner')
-const elBtnRefresh    = document.getElementById('btn-refresh')
+// ─── DOM References ───────────────────────────────────────────────────────────
+const versionListContainer = document.getElementById('version-list')
+const loadingState         = document.getElementById('loading-state')
+const detailEmptyView      = document.getElementById('detail-empty')
+const detailContentView    = document.getElementById('detail-content')
+const detailTag            = document.getElementById('detail-tag')
+const detailName           = document.getElementById('detail-name')
+const detailMeta           = document.getElementById('detail-meta')
+const detailNotes          = document.getElementById('detail-notes')
+const progressWrapper      = document.getElementById('progress-wrap')
+const progressLabel        = document.getElementById('progress-label')
+const progressBarFill      = document.getElementById('progress-bar-fill')
+const progressPercentage   = document.getElementById('progress-pct')
+const btnLaunch            = document.getElementById('btn-launch')
+const btnDownload          = document.getElementById('btn-download')
+const btnDelete            = document.getElementById('btn-delete')
+const noAssetMessage       = document.getElementById('no-asset-msg')
+const statusText           = document.getElementById('status-text')
+const statusbarRight       = document.getElementById('statusbar-right')
+const offlineBanner        = document.getElementById('offline-banner')
+const btnRefresh           = document.getElementById('btn-refresh')
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function setStatus(msg) { elStatus.textContent = msg }
+function setStatus(msg) {
+  statusText.textContent = msg
+}
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -50,20 +52,20 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(0)} MB`
 }
 
-// ─── Filter releases ─────────────────────────────────────────────────────────
+// ─── Filter Releases ─────────────────────────────────────────────────────────
 function getFiltered() {
   if (currentFilter === 'installed') return allReleases.filter(r => r.installed)
   if (currentFilter === 'latest')    return allReleases.slice(0, 3)
   return allReleases
 }
 
-// ─── Render version list ─────────────────────────────────────────────────────
+// ─── Render Version List ─────────────────────────────────────────────────────
 function renderList() {
   const releases = getFiltered()
-  elVersionList.innerHTML = ''
+  versionListContainer.innerHTML = ''
 
   if (releases.length === 0) {
-    elVersionList.innerHTML = `<div class="loading-state" style="color:var(--text-dim)">No versions match this filter.</div>`
+    versionListContainer.innerHTML = `<div class="loading-state" style="color:var(--text-dim)">No versions match this filter.</div>`
     return
   }
 
@@ -88,65 +90,63 @@ function renderList() {
       ${badges.join('')}
     `
     card.addEventListener('click', () => selectRelease(r))
-    elVersionList.appendChild(card)
+    versionListContainer.appendChild(card)
   })
 }
 
-// ─── Select a release (show detail) ──────────────────────────────────────────
+// ─── Select Release ──────────────────────────────────────────────────────────
 function selectRelease(r) {
   selectedRelease = r
-  renderList() // re-render to update selected highlight
+  renderList()
 
-  elDetailEmpty.style.display   = 'none'
-  elDetailContent.style.display = 'flex'
-  elProgressWrap.style.display  = 'none'
+  detailEmptyView.style.display   = 'none'
+  detailContentView.style.display = 'flex'
+  progressWrapper.style.display   = 'none'
 
-  elDetailTag.textContent  = r.tag
-  elDetailName.textContent = r.name !== r.tag ? r.name : ''
-  elDetailMeta.innerHTML   = [
+  detailTag.textContent  = r.tag
+  detailName.textContent = r.name !== r.tag ? r.name : ''
+  detailMeta.innerHTML   = [
     r.published ? `<span>📅 ${formatDate(r.published)}</span>` : '',
     r.zipAsset  ? `<span>💾 ${formatBytes(r.zipAsset.size)}</span>` : '',
-    r.prerelease ? `<span style="color:var(--amber)">⚠ Pre-release</span>` : ''
+    r.prerelease ? `<span style="color:var(--amber)">Pre-release</span>` : ''
   ].filter(Boolean).join('')
 
-  elDetailNotes.textContent = r.body
+  detailNotes.textContent = r.body
     ? r.body.replace(/\r\n/g, '\n').trim()
     : 'No release notes provided.'
 
-  // Show appropriate action buttons
-  elBtnLaunch.style.display   = 'none'
-  elBtnDownload.style.display = 'none'
-  elBtnDelete.style.display   = 'none'
-  elNoAsset.style.display     = 'none'
+  btnLaunch.style.display   = 'none'
+  btnDownload.style.display = 'none'
+  btnDelete.style.display   = 'none'
+  noAssetMessage.style.display = 'none'
 
   if (r.installed) {
-    elBtnLaunch.style.display = 'inline-flex'
-    elBtnDelete.style.display = 'inline-flex'
+    btnLaunch.style.display = 'inline-flex'
+    btnDelete.style.display = 'inline-flex'
   } else if (r.zipAsset) {
-    elBtnDownload.style.display = 'inline-flex'
+    btnDownload.style.display = 'inline-flex'
   } else {
-    elNoAsset.style.display = 'block'
+    noAssetMessage.style.display = 'block'
   }
 
-  elStatusRight.textContent = r.zipAsset
+  statusbarRight.textContent = r.zipAsset
     ? `Asset: ${r.zipAsset.name}`
     : 'No win-x64 asset found'
 }
 
-// ─── Fetch releases from GitHub ──────────────────────────────────────────────
+// ─── Fetch Releases ──────────────────────────────────────────────────────────
 async function fetchReleases() {
-  elLoadingState.style.display = 'flex'
-  elVersionList.innerHTML = ''
-  elVersionList.appendChild(elLoadingState)
+  loadingState.style.display = 'flex'
+  versionListContainer.innerHTML = ''
+  versionListContainer.appendChild(loadingState)
   setStatus('Fetching releases from GitHub…')
-  elBtnRefresh.classList.add('spinning')
+  btnRefresh.classList.add('spinning')
 
   try {
     const result = await launcher.fetchReleases()
 
     if (result.error) {
-      // Could be offline — try showing installed only
-      elOfflineBanner.style.display = 'block'
+      offlineBanner.style.display = 'block'
       const installed = await launcher.getInstalled()
       allReleases = installed.map(tag => ({
         tag, name: tag, body: '', published: null,
@@ -154,57 +154,54 @@ async function fetchReleases() {
       }))
       setStatus('Offline — showing installed versions only')
     } else {
-      elOfflineBanner.style.display = 'none'
+      offlineBanner.style.display = 'none'
       allReleases = result
       setStatus(`${allReleases.length} release(s) found`)
     }
   } catch (err) {
-    elOfflineBanner.style.display = 'block'
-    setStatus('Failed to fetch releases: ' + err.message)
+    offlineBanner.style.display = 'block'
+    setStatus(`Failed to fetch releases: ${err.message}`)
     allReleases = []
   }
 
-  elLoadingState.style.display = 'none'
-  elBtnRefresh.classList.remove('spinning')
+  loadingState.style.display = 'none'
+  btnRefresh.classList.remove('spinning')
 
   renderList()
 
-  // Auto-select last used or latest
   if (allReleases.length > 0) {
     const config = await launcher.getConfig()
     const last = allReleases.find(r => r.tag === config.lastVersion)
     selectRelease(last || allReleases[0])
   }
 
-  // Update version count in statusbar
   const installedCount = allReleases.filter(r => r.installed).length
-  elStatusRight.textContent = `${installedCount} installed`
+  statusbarRight.textContent = `${installedCount} installed`
 }
 
-// ─── Download a version ───────────────────────────────────────────────────────
+// ─── Download Version ────────────────────────────────────────────────────────
 async function startDownload(r) {
   if (isDownloading) return
   isDownloading = true
 
-  elBtnDownload.disabled = true
-  elProgressWrap.style.display = 'block'
-  elProgressLabel.textContent = `Downloading ${r.tag}…`
-  elProgressFill.style.width  = '0%'
-  elProgressPct.textContent   = '0%'
+  btnDownload.disabled = true
+  progressWrapper.style.display = 'block'
+  progressLabel.textContent = `Downloading ${r.tag}…`
+  progressBarFill.style.width = '0%'
+  progressPercentage.textContent = '0%'
   setStatus(`Downloading ${r.tag} (${formatBytes(r.zipAsset.size)})…`)
 
-  // Subscribe to progress events
   if (removeProgressListener) removeProgressListener()
   removeProgressListener = launcher.onDownloadProgress(data => {
     if (data.tag !== r.tag) return
     if (data.phase === 'extracting') {
-      elProgressLabel.textContent = `Extracting ${r.tag}…`
-      elProgressFill.style.width  = '100%'
-      elProgressPct.textContent   = 'Extracting…'
+      progressLabel.textContent = `Extracting ${r.tag}…`
+      progressBarFill.style.width = '100%'
+      progressPercentage.textContent = 'Extracting…'
       setStatus(`Extracting ${r.tag}…`)
     } else {
-      elProgressFill.style.width = `${data.pct}%`
-      elProgressPct.textContent  = `${data.pct}%  (${formatBytes(data.received)} / ${formatBytes(data.total)})`
+      progressBarFill.style.width = `${data.pct}%`
+      progressPercentage.textContent = `${data.pct}% (${formatBytes(data.received)} / ${formatBytes(data.total)})`
     }
   })
 
@@ -212,61 +209,63 @@ async function startDownload(r) {
 
   if (removeProgressListener) { removeProgressListener(); removeProgressListener = null }
   isDownloading = false
-  elBtnDownload.disabled = false
-  elProgressWrap.style.display = 'none'
+  btnDownload.disabled = false
+  progressWrapper.style.display = 'none'
 
   if (result.error) {
-    setStatus(`❌ Download failed: ${result.error}`)
+    setStatus(`Download failed: ${result.error}`)
     return
   }
 
-  setStatus(`✅ ${r.tag} installed`)
+  setStatus(`${r.tag} installed successfully`)
 
-  // Update installed state and re-render
   r.installed = true
   renderList()
   selectRelease(r)
 }
 
-// ─── Launch a version ─────────────────────────────────────────────────────────
+// ─── Launch Version ──────────────────────────────────────────────────────────
 async function launchVersion(r) {
   setStatus(`Launching ${r.tag}…`)
-  elBtnLaunch.disabled = true
+  btnLaunch.disabled = true
 
   const result = await launcher.launchVersion(r.tag)
 
-  elBtnLaunch.disabled = false
+  btnLaunch.disabled = false
   if (result.error) {
-    setStatus(`❌ Launch failed: ${result.error}`)
+    setStatus(`Launch failed: ${result.error}`)
   } else {
-    setStatus(`✅ ${r.tag} launched`)
+    setStatus(`${r.tag} launched`)
   }
 }
 
-// ─── Delete a version ─────────────────────────────────────────────────────────
+// ─── Delete Version ──────────────────────────────────────────────────────────
 async function deleteVersion(r) {
   if (!confirm(`Remove REWIND ${r.tag}? This deletes the installed files.`)) return
   setStatus(`Removing ${r.tag}…`)
 
   const result = await launcher.deleteVersion(r.tag)
   if (result.error) {
-    setStatus(`❌ Remove failed: ${result.error}`)
+    setStatus(`Remove failed: ${result.error}`)
     return
   }
 
   r.installed = false
-  setStatus(`Removed ${r.tag}`)
+  setStatus(`${r.tag} removed`)
   renderList()
   selectRelease(r)
 }
 
-// ─── Event listeners ─────────────────────────────────────────────────────────
+// ─── Event Listeners ─────────────────────────────────────────────────────────
 document.getElementById('btn-minimize').addEventListener('click', () => launcher.minimize())
-document.getElementById('btn-close').addEventListener('click',    () => launcher.close())
+document.getElementById('btn-close').addEventListener('click', () => launcher.close())
 document.getElementById('btn-open-releases').addEventListener('click', () => launcher.openReleases())
-document.getElementById('link-releases')?.addEventListener('click', (e) => { e.preventDefault(); launcher.openReleases() })
+document.getElementById('link-releases')?.addEventListener('click', (e) => {
+  e.preventDefault()
+  launcher.openReleases()
+})
 
-elBtnRefresh.addEventListener('click', fetchReleases)
+btnRefresh.addEventListener('click', fetchReleases)
 
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -277,9 +276,9 @@ document.querySelectorAll('.tab').forEach(tab => {
   })
 })
 
-elBtnLaunch.addEventListener('click',   () => selectedRelease && launchVersion(selectedRelease))
-elBtnDownload.addEventListener('click', () => selectedRelease && startDownload(selectedRelease))
-elBtnDelete.addEventListener('click',   () => selectedRelease && deleteVersion(selectedRelease))
+btnLaunch.addEventListener('click', () => selectedRelease && launchVersion(selectedRelease))
+btnDownload.addEventListener('click', () => selectedRelease && startDownload(selectedRelease))
+btnDelete.addEventListener('click', () => selectedRelease && deleteVersion(selectedRelease))
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 fetchReleases()

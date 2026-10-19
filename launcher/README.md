@@ -1,6 +1,6 @@
 # REWIND Launcher
 
-Minecraft-style version manager for REWIND. Install once — pick and switch between any GitHub release.
+Multi-version distribution manager for REWIND. Install once to discover, download, and switch between GitHub releases.
 
 ## How It Works
 

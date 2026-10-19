@@ -31,6 +31,9 @@ export const UndoTier = {
   FILE_ROLLBACK: 'FILE_ROLLBACK',
 }
 
+const MAX_WINDOW_POLL_ATTEMPTS = 15
+const WINDOW_POLL_INTERVAL_MS = 300
+
 export class UndoEngine {
   /**
    * Executes synthetic Ctrl+Z on the target active window with focus verification.
@@ -100,10 +103,10 @@ export class UndoEngine {
             if (bounds) {
               restoreWindowPosition(active.hwnd, bounds)
             }
-          } else if (attempts > 15) {
+          } else if (attempts > MAX_WINDOW_POLL_ATTEMPTS) {
             clearInterval(pollTimer)
           }
-        }, 300)
+        }, WINDOW_POLL_INTERVAL_MS)
       }
 
       return true
@@ -113,12 +116,6 @@ export class UndoEngine {
     }
   }
 
-  /**
-   * Reverts a tracked file back to a previous snapshot content.
-   * @param {string} filePath
-   * @param {string} previousContent
-   * @returns {boolean}
-   */
   /**
    * Restores a point-in-time event: resurrects closed app or restores coordinates of active app.
    * @param {{ exePath?: string, bounds?: {x: number, y: number, width: number, height: number}, hwnd?: number, kind?: string }} event

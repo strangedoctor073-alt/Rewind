@@ -112,7 +112,7 @@ function getAudioContext() {
     try {
       audioCtx = new Ctx()
     } catch {
-      // suppressed
+      // Web Audio unavailable; degrade gracefully
     }
   }
   return audioCtx
@@ -135,7 +135,7 @@ function playTickSound() {
     osc.start(ctx.currentTime)
     osc.stop(ctx.currentTime + 0.02)
   } catch {
-    // audio fallback
+    // Web Audio unavailable; degrade gracefully
   }
 }
 
@@ -157,7 +157,7 @@ function playResurrectSound() {
     osc.start(ctx.currentTime)
     osc.stop(ctx.currentTime + 0.14)
   } catch {
-    // audio fallback
+    // Web Audio unavailable; degrade gracefully
   }
 }
 
@@ -287,7 +287,8 @@ function renderFilmstrip() {
   videoScrubberSlider.max = Math.max(0, filtered.length - 1)
   updateScrubberTimeDisplay(filtered)
 
-  const visibleBatch = filtered.slice(0, 50)
+  const MAX_VISIBLE_CARDS = 50
+  const visibleBatch = filtered.slice(0, MAX_VISIBLE_CARDS)
 
   visibleBatch.forEach((event, idx) => {
     const card = document.createElement('div')
@@ -422,7 +423,6 @@ function startVideoPlayback() {
     }
 
     if (replayIndex >= events.length - 1) {
-      // Reached the end, loop or pause
       replayIndex = 0
     } else {
       replayIndex++
@@ -483,11 +483,11 @@ function renderProductivityStats(data) {
 
   statFocusScore.textContent = data.focusScore ?? '--'
   if (data.focusScore >= 80) {
-    statFocusDesc.textContent = '🔥 Excellent deep work focus!'
+    statFocusDesc.textContent = 'Optimal deep work focus'
   } else if (data.focusScore >= 60) {
-    statFocusDesc.textContent = '⚡ Balanced productive session'
+    statFocusDesc.textContent = 'Balanced productive session'
   } else {
-    statFocusDesc.textContent = '⚠️ High context-switching detected'
+    statFocusDesc.textContent = 'Elevated context-switching detected'
   }
 
   statActiveTime.textContent = formatDuration(data.totalActiveMs)

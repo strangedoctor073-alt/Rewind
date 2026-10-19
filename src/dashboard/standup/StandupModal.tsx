@@ -6,6 +6,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { callDaemon } from '../hooks/daemonClient';
 
+const OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
+const DEFAULT_OLLAMA_MODEL = 'llama3:8b';
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -18,14 +21,14 @@ export function StandupModal({ isOpen, onClose }: Props) {
   const [copied, setCopied] = useState<boolean>(false);
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [models, setModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('llama3:8b');
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_OLLAMA_MODEL);
 
   // Check Ollama connection on open
   useEffect(() => {
     if (!isOpen) return;
     let isCancelled = false;
 
-    fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1500) })
+    fetch(`${OLLAMA_BASE_URL}/api/tags`, { signal: AbortSignal.timeout(1500) })
       .then((res) => res.json())
       .then((data: { models?: Array<{ name: string }> }) => {
         if (isCancelled) return;
@@ -116,9 +119,9 @@ export function StandupModal({ isOpen, onClose }: Props) {
             }} />
             <span style={{ color: ollamaStatus === 'online' ? '#34d399' : '#fbbf24', fontWeight: 600 }}>
               {ollamaStatus === 'checking'
-                ? 'Probing local Ollama service...'
+                ? 'Connecting to local Ollama service…'
                 : ollamaStatus === 'online'
-                ? 'Ollama Local LLM Connected (http://127.0.0.1:11434)'
+                ? `Ollama Local LLM Connected (${OLLAMA_BASE_URL})`
                 : 'Ollama Offline — Using Local Cognitive Heuristics'}
             </span>
           </div>

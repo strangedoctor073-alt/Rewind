@@ -48,6 +48,7 @@ dist-daemon
 
 # Packaged installer output
 dist-electron
+dist-launcher
 
 # Agent roadmaps and instructions
 AGENTS.md

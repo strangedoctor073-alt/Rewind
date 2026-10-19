@@ -1,11 +1,10 @@
 /**
  * REWIND Launcher — main.cjs
- * Minecraft-style version manager.
- * Fetches GitHub Releases, manages downloads/extraction, launches REWIND.
+ * Version manager: fetches GitHub Releases, manages downloads/extraction, launches REWIND.
  */
 'use strict'
 
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const https = require('node:https')
@@ -16,6 +15,8 @@ const os = require('node:os')
 const GITHUB_OWNER = 'strangedoctor073-alt'
 const GITHUB_REPO = 'Rewind'
 const RELEASES_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`
+const USER_AGENT = `REWIND-Launcher/1.0 (${GITHUB_OWNER}/${GITHUB_REPO})`
+const REWIND_EXE = 'REWIND.exe'
 
 // ─── Storage paths ────────────────────────────────────────────────────────────
 /** Directory where each version is extracted: %APPDATA%\REWIND-Launcher\versions\ */
@@ -64,40 +65,37 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 
-// ─── HTTP GET helper (follows redirects) ────────────────────────────────────
+// ─── HTTP GET helper (follows redirects) ─────────────────────────────────────
+const REDIRECT_CODES = new Set([301, 302, 307, 308])
+
 function httpsGet(url, headers = {}) {
   return new Promise((resolve, reject) => {
-    const opts = new URL(url)
     const reqHeaders = {
-      'User-Agent': `REWIND-Launcher/1.0 (${GITHUB_OWNER}/${GITHUB_REPO})`,
+      'User-Agent': USER_AGENT,
       'Accept': 'application/vnd.github+json',
       ...headers
     }
-    function doGet(u) {
-      https.get(u, { headers: reqHeaders }, res => {
-        if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
-          return doGet(res.headers.location)
-        }
+    function follow(requestUrl) {
+      https.get(requestUrl, { headers: reqHeaders }, res => {
+        if (REDIRECT_CODES.has(res.statusCode)) return follow(res.headers.location)
         let body = ''
         res.on('data', d => { body += d })
         res.on('end', () => resolve({ status: res.statusCode, body }))
         res.on('error', reject)
       }).on('error', reject)
     }
-    doGet(url)
+    follow(url)
   })
 }
 
 // ─── Streaming download with progress ────────────────────────────────────────
 function downloadFile(url, destPath, onProgress) {
   return new Promise((resolve, reject) => {
-    function doGet(u) {
-      https.get(u, {
-        headers: { 'User-Agent': `REWIND-Launcher/1.0` }
+    function follow(requestUrl) {
+      https.get(requestUrl, {
+        headers: { 'User-Agent': USER_AGENT }
       }, res => {
-        if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
-          return doGet(res.headers.location)
-        }
+        if (REDIRECT_CODES.has(res.statusCode)) return follow(res.headers.location)
         if (res.statusCode !== 200) {
           return reject(new Error(`Download failed: HTTP ${res.statusCode}`))
         }
@@ -114,7 +112,7 @@ function downloadFile(url, destPath, onProgress) {
         out.on('error', reject)
       }).on('error', reject)
     }
-    doGet(url)
+    follow(url)
   })
 }
 
@@ -149,7 +147,7 @@ function findZipAsset(release) {
 
 // ─── Check if a version is installed ─────────────────────────────────────────
 function isInstalled(version) {
-  const exePath = path.join(versionsDir, version, 'REWIND.exe')
+  const exePath = path.join(versionsDir, version, REWIND_EXE)
   return fs.existsSync(exePath)
 }
 
@@ -161,19 +159,22 @@ ipcMain.handle('fetch-releases', async () => {
     const { status, body } = await httpsGet(RELEASES_API)
     if (status !== 200) return { error: `GitHub API returned ${status}` }
     const releases = JSON.parse(body)
-    return releases.map(r => ({
-      id: r.id,
-      tag: r.tag_name,
-      name: r.name || r.tag_name,
-      body: r.body || '',
-      published: r.published_at,
-      prerelease: r.prerelease,
-      draft: r.draft,
-      zipAsset: findZipAsset(r)
-        ? { name: findZipAsset(r).name, url: findZipAsset(r).browser_download_url, size: findZipAsset(r).size }
-        : null,
-      installed: isInstalled(r.tag_name)
-    }))
+    return releases.map(r => {
+      const zipAsset = findZipAsset(r)
+      return {
+        id: r.id,
+        tag: r.tag_name,
+        name: r.name || r.tag_name,
+        body: r.body || '',
+        published: r.published_at,
+        prerelease: r.prerelease,
+        draft: r.draft,
+        zipAsset: zipAsset
+          ? { name: zipAsset.name, url: zipAsset.browser_download_url, size: zipAsset.size }
+          : null,
+        installed: isInstalled(r.tag_name)
+      }
+    })
   } catch (err) {
     return { error: err.message }
   }
@@ -207,7 +208,7 @@ ipcMain.handle('download-version', async (event, { tag, url, name }) => {
 
     // Verify REWIND.exe is present
     if (!isInstalled(tag)) {
-      return { error: 'Extraction succeeded but REWIND.exe not found. Check the zip structure.' }
+      return { error: `Extraction succeeded but ${REWIND_EXE} not found. Check the zip structure.` }
     }
     return { ok: true }
   } catch (err) {
@@ -218,7 +219,7 @@ ipcMain.handle('download-version', async (event, { tag, url, name }) => {
 
 /** Launch a specific installed version */
 ipcMain.handle('launch-version', async (event, { tag }) => {
-  const exePath = path.join(versionsDir, tag, 'REWIND.exe')
+  const exePath = path.join(versionsDir, tag, REWIND_EXE)
   if (!fs.existsSync(exePath)) return { error: 'Not installed' }
 
   // Save last used version

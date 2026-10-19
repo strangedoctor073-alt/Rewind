@@ -30,67 +30,21 @@ import { audioEngine } from '../audio/synth'
 import type { DashboardMoment, DashboardViewMode, TelemetryStats } from './types'
 import { useDaemonRpc } from './hooks/useDaemonRpc'
 import { resurrectWorkspace } from './hooks/daemonClient'
+import { fallbackMoments } from './fixtures/fallbackMoments'
 
-const initialMockMoments: DashboardMoment[] = [
-  {
-    id: 'm1',
-    timestamp: Date.now() - 1000 * 60 * 35,
-    appName: 'Code.exe',
-    windowTitle: 'authMiddleware.ts - REWIND (VS Code)',
-    processPath: 'C:\\Users\\dev\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
-    pid: 14208,
-    bounds: { x: 100, y: 50, width: 1400, height: 900 },
-    gitBranch: 'feat/auth-guard',
-    ocrText: 'export async function verifyToken(req: Request) { ... }',
-    ocrTokens: [
-      { word: 'verifyToken', x: 20, y: 30, width: 80, height: 18 },
-      { word: 'req: Request', x: 110, y: 30, width: 90, height: 18 },
-      { word: 'JWT_SECRET', x: 210, y: 30, width: 90, height: 18 },
-    ],
-  },
-  {
-    id: 'm2',
-    timestamp: Date.now() - 1000 * 60 * 25,
-    appName: 'WindowsTerminal.exe',
-    windowTitle: 'PowerShell - npm test',
-    processPath: 'C:\\Program Files\\WindowsApps\\wt.exe',
-    pid: 9284,
-    bounds: { x: 200, y: 150, width: 1100, height: 700 },
-    gitBranch: 'feat/auth-guard',
-    ocrText: 'PASS daemon/db/__tests__/timelineDb.test.ts (5 tests)',
-    ocrTokens: [
-      { word: 'PASS', x: 20, y: 40, width: 40, height: 16 },
-      { word: '5 tests', x: 70, y: 40, width: 60, height: 16 },
-    ],
-  },
-  {
-    id: 'm3',
-    timestamp: Date.now() - 1000 * 60 * 12,
-    appName: 'chrome.exe',
-    windowTitle: 'http://localhost:5173 - REWIND Grand Dashboard',
-    processPath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    pid: 19830,
-    bounds: { x: 50, y: 50, width: 1600, height: 950 },
-    gitBranch: 'feat/auth-guard',
-    domTarget: '#timeline-filter > button.active',
-    ocrText: 'Active Session: 35m • Focus Score: 94%',
-  },
-  {
-    id: 'm4',
-    timestamp: Date.now() - 1000 * 60 * 2,
-    appName: 'Figma.exe',
-    windowTitle: 'REWIND v2.0 UI Mockups - Figma',
-    processPath: 'C:\\Users\\dev\\AppData\\Local\\Figma\\Figma.exe',
-    pid: 24310,
-    bounds: { x: 100, y: 80, width: 1500, height: 900 },
-    gitBranch: 'main',
-    ocrText: 'Linear Dark Mode • Frosted Glassmorphism Theme',
-  },
-]
+interface RewindStudioApi {
+  onShowCloseDialog?: (cb: () => void) => () => void
+  onPrunedNotification?: (cb: (count: number) => void) => () => void
+  sendCloseChoice?: (choice: { action: 'minimize' | 'exit'; remember: boolean }) => void
+}
+
+function getRewindStudio(): RewindStudioApi | undefined {
+  return (window as unknown as { rewindStudio?: RewindStudioApi }).rewindStudio
+}
 
 export const GrandDashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<DashboardViewMode>('flow')
-  const { isConnected, isLive, needsToken, moments, stats: liveStats, focusReport, pair } = useDaemonRpc(initialMockMoments)
+  const { isConnected, isLive, needsToken, moments, stats: liveStats, focusReport, pair } = useDaemonRpc(fallbackMoments)
   const [selectedMomentId, setSelectedMomentId] = useState<string>('m3')
   const [isOmniboxOpen, setIsOmniboxOpen] = useState(false)
   const [isSoundMuted, setIsSoundMuted] = useState(audioEngine.isMuted())
@@ -145,13 +99,7 @@ export const GrandDashboard: React.FC = () => {
 
   // Desktop Shell IPC Listeners (Close dialog, Pruned notification)
   useEffect(() => {
-    const studio = (window as unknown as {
-      rewindStudio?: {
-        onShowCloseDialog?: (cb: () => void) => () => void
-        onPrunedNotification?: (cb: (count: number) => void) => () => void
-      }
-    }).rewindStudio
-
+    const studio = getRewindStudio()
     if (studio?.onShowCloseDialog) {
       const unbind = studio.onShowCloseDialog(() => {
         setIsCloseModalOpen(true)
@@ -161,12 +109,7 @@ export const GrandDashboard: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    const studio = (window as unknown as {
-      rewindStudio?: {
-        onPrunedNotification?: (cb: (count: number) => void) => () => void
-      }
-    }).rewindStudio
-
+    const studio = getRewindStudio()
     if (studio?.onPrunedNotification) {
       const unbind = studio.onPrunedNotification((count: number) => {
         setPrunedToast(`Cleaned up ${count} old moments to preserve disk space`)
@@ -178,12 +121,7 @@ export const GrandDashboard: React.FC = () => {
 
   const handleCloseConfirm = useCallback((action: 'minimize' | 'exit', remember: boolean) => {
     setIsCloseModalOpen(false)
-    const studio = (window as unknown as {
-      rewindStudio?: {
-        sendCloseChoice?: (choice: { action: 'minimize' | 'exit'; remember: boolean }) => void
-      }
-    }).rewindStudio
-
+    const studio = getRewindStudio()
     if (studio?.sendCloseChoice) {
       studio.sendCloseChoice({ action, remember })
     }
@@ -256,7 +194,7 @@ export const GrandDashboard: React.FC = () => {
         currentX += 340
 
         if (isCollapsed) {
-          return // Skip descendant moment nodes when collapsed!
+          return // Session is collapsed; skip child moments
         }
       }
 
