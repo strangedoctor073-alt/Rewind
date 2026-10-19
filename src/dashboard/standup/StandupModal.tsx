@@ -1,9 +1,9 @@
 /**
  * StandupModal.tsx
- * Daily Standup, Timesheet & Commit Summary Generator UI modal for REWIND v4.0.
+ * Daily Standup, Timesheet & Commit Summary Generator UI modal for REWIND v4.0 & v6.0.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { callDaemon } from '../hooks/daemonClient';
 
 interface Props {
@@ -16,22 +16,56 @@ export function StandupModal({ isOpen, onClose }: Props) {
   const [summaryText, setSummaryText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [models, setModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('llama3:8b');
+
+  // Check Ollama connection on open
+  useEffect(() => {
+    if (!isOpen) return;
+    let isCancelled = false;
+
+    fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1500) })
+      .then((res) => res.json())
+      .then((data: { models?: Array<{ name: string }> }) => {
+        if (isCancelled) return;
+        setOllamaStatus('online');
+        if (data?.models && Array.isArray(data.models) && data.models.length > 0) {
+          const names = data.models.map((m) => m.name);
+          setModels(names);
+          if (!names.includes(selectedModel)) {
+            setSelectedModel(names[0]);
+          }
+        }
+      })
+      .catch(() => {
+        if (isCancelled) return;
+        setOllamaStatus('offline');
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, selectedModel]);
 
   const handleGenerate = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await callDaemon<{ markdown: string }>('ai.standup', { type: summaryType });
+      const data = await callDaemon<{ markdown: string }>('ai.standup', {
+        type: summaryType,
+        model: selectedModel,
+      });
       if (data && typeof data.markdown === 'string') {
         setSummaryText(data.markdown);
       } else {
         setSummaryText('Failed to generate summary. Please ensure REWIND daemon is running.');
       }
     } catch {
-      setSummaryText('Failed to connect to REWIND AI daemon. Run `rewind token` to pair.');
+      setSummaryText('Failed to connect to REWIND AI daemon. Ensure daemon is running on port 48292.');
     } finally {
       setLoading(false);
     }
-  }, [summaryType]);
+  }, [summaryType, selectedModel]);
 
   const handleCopy = useCallback(async () => {
     if (!summaryText) return;
@@ -50,8 +84,70 @@ export function StandupModal({ isOpen, onClose }: Props) {
     <div style={styles.backdrop} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
-          <span style={styles.title}>🧠 Cognitive Standup & Summary</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '1.25rem' }}>🧠</span>
+            <div>
+              <div style={styles.title}>Cognitive AI Recall & Standup</div>
+              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>
+                Local LLM synthesis via Ollama (127.0.0.1:11434) with zero-crash heuristics fallback
+              </div>
+            </div>
+          </div>
           <button style={styles.closeBtn} onClick={onClose}>×</button>
+        </div>
+
+        {/* Ollama Connection Status Banner */}
+        <div style={{
+          padding: '10px 18px',
+          background: ollamaStatus === 'online' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+          borderBottom: `1px solid ${ollamaStatus === 'online' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '0.75rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: ollamaStatus === 'online' ? '#10b981' : ollamaStatus === 'offline' ? '#f59e0b' : '#94a3b8',
+              boxShadow: ollamaStatus === 'online' ? '0 0 8px #10b981' : '0 0 6px #f59e0b',
+            }} />
+            <span style={{ color: ollamaStatus === 'online' ? '#34d399' : '#fbbf24', fontWeight: 600 }}>
+              {ollamaStatus === 'checking'
+                ? 'Probing local Ollama service...'
+                : ollamaStatus === 'online'
+                ? 'Ollama Local LLM Connected (http://127.0.0.1:11434)'
+                : 'Ollama Offline — Using Local Cognitive Heuristics'}
+            </span>
+          </div>
+
+          {ollamaStatus === 'online' && models.length > 0 && (
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              style={{
+                background: '#0f172a',
+                color: '#38bdf8',
+                border: '1px solid #334155',
+                borderRadius: 6,
+                padding: '3px 8px',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+              }}
+            >
+              {models.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          )}
+
+          {ollamaStatus === 'offline' && (
+            <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+              Tip: run <code style={{ color: '#00f0ff' }}>ollama serve</code> to enable Llama3/Mistral
+            </span>
+          )}
         </div>
 
         <div style={styles.tabs}>
@@ -59,19 +155,19 @@ export function StandupModal({ isOpen, onClose }: Props) {
             style={summaryType === 'daily_standup' ? styles.activeTab : styles.tab}
             onClick={() => setSummaryType('daily_standup')}
           >
-            Daily Standup
+            📋 Daily Standup
           </button>
           <button
             style={summaryType === 'timesheet' ? styles.activeTab : styles.tab}
             onClick={() => setSummaryType('timesheet')}
           >
-            Timesheet
+            ⏱️ Timesheet
           </button>
           <button
             style={summaryType === 'commit_draft' ? styles.activeTab : styles.tab}
             onClick={() => setSummaryType('commit_draft')}
           >
-            Commit Draft
+            🌿 Commit Draft
           </button>
         </div>
 
@@ -84,7 +180,7 @@ export function StandupModal({ isOpen, onClose }: Props) {
             />
           ) : (
             <div style={styles.placeholder}>
-              Click Generate to synthesize your recent activity using local AI (Ollama or Cognitive Heuristics).
+              Click <strong>Generate Summary</strong> to synthesize your recent desktop activity into a polished report using local AI.
             </div>
           )}
         </div>

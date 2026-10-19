@@ -25,6 +25,7 @@ import { CloseConfirmModal } from './components/CloseConfirmModal'
 import { ChromeOnboardingModal } from './components/ChromeOnboardingModal'
 import { AboutDeveloperModal } from './components/AboutDeveloperModal'
 import { RetentionSettingsModal } from './components/RetentionSettingsModal'
+import { StandupModal } from './standup/StandupModal'
 import { audioEngine } from '../audio/synth'
 import type { DashboardMoment, DashboardViewMode, TelemetryStats } from './types'
 import { useDaemonRpc } from './hooks/useDaemonRpc'
@@ -97,6 +98,7 @@ export const GrandDashboard: React.FC = () => {
   const [isChromeModalOpen, setIsChromeModalOpen] = useState(false)
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
   const [isRetentionModalOpen, setIsRetentionModalOpen] = useState(false)
+  const [isStandupModalOpen, setIsStandupModalOpen] = useState(false)
   const [prunedToast, setPrunedToast] = useState<string | null>(null)
   const [collapsedSessions, setCollapsedSessions] = useState<Set<string>>(new Set())
 
@@ -453,6 +455,18 @@ export const GrandDashboard: React.FC = () => {
 
           <button
             className="rewind-btn"
+            onClick={() => setIsStandupModalOpen(true)}
+            title="Local AI Connection (Ollama & Cognitive Recall)"
+            style={{
+              borderColor: 'rgba(168, 85, 247, 0.45)',
+              color: '#d8b4fe',
+            }}
+          >
+            🧠 Local AI
+          </button>
+
+          <button
+            className="rewind-btn"
             onClick={() => {
               setIsOmniboxOpen(true)
               audioEngine.playTick(1.2)
@@ -619,6 +633,12 @@ export const GrandDashboard: React.FC = () => {
         isOpen={isRetentionModalOpen}
         onClose={() => setIsRetentionModalOpen(false)}
         onPruned={(count) => setPrunedToast(`Retention sweep: ${count} old moments pruned.`)}
+      />
+
+      {/* Local AI / Cognitive Standup Modal */}
+      <StandupModal
+        isOpen={isStandupModalOpen}
+        onClose={() => setIsStandupModalOpen(false)}
       />
     </div>
   )

@@ -65,7 +65,38 @@ export function createDefaultLauncher(
           stdio: 'ignore',
           windowsHide: false,
         })
-        child.once('error', (err: Error) => resolve({ ok: false, error: err.message }))
+        child.once('error', (err: Error) => {
+          // If Windows Terminal (wt.exe) is not installed on this machine, fall back to cmd /c start
+          if (request.command.toLowerCase() === 'wt.exe') {
+            try {
+              const fallbackArgs = ['/c', 'start']
+              // If an explicit directory was passed via -d, pass /D
+              const dIndex = request.args.indexOf('-d')
+              if (dIndex !== -1 && request.args[dIndex + 1]) {
+                fallbackArgs.push('/D', request.args[dIndex + 1])
+              }
+              const shellName = request.args.find((a) => a.endsWith('.exe')) || 'cmd.exe'
+              fallbackArgs.push('""', shellName)
+              const fallback = spawnFn('cmd.exe', fallbackArgs, {
+                shell: false,
+                detached: true,
+                stdio: 'ignore',
+                windowsHide: true,
+              })
+              fallback.once('spawn', () => {
+                fallback.unref()
+                resolve({ ok: true })
+              })
+              fallback.once('error', () => {
+                resolve({ ok: false, error: err.message })
+              })
+              return
+            } catch {
+              // fallback failed
+            }
+          }
+          resolve({ ok: false, error: err.message })
+        })
         child.once('spawn', () => {
           child.unref()
           resolve({ ok: true })

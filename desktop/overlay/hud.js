@@ -214,6 +214,29 @@ function formatDuration(ms) {
 // -----------------------------------------------------------------------------
 // Filmstrip Rendering
 // -----------------------------------------------------------------------------
+function isNonRestorableEvent(event) {
+  const name = (event.processName || '').toLowerCase()
+  const title = (event.title || '').toLowerCase()
+  if (!event.exePath && !name) return true
+  if (
+    name === 'searchapp.exe' ||
+    name === 'searchhost.exe' ||
+    name === 'shellexperiencehost.exe' ||
+    name === 'startmenuexperiencehost.exe' ||
+    name === 'lockapp.exe' ||
+    name === 'systemsettings.exe' ||
+    name === 'taskmgr.exe' ||
+    name === 'dwm.exe' ||
+    name === 'csrss.exe'
+  ) {
+    return true
+  }
+  if (name === 'explorer.exe' && (!title || title === 'program manager' || title === 'taskbar' || title === 'notification chevron')) {
+    return true
+  }
+  return false
+}
+
 function getFilteredEvents() {
   let filtered = allEvents
 
@@ -235,6 +258,10 @@ function getFilteredEvents() {
     filtered = filtered.filter((e) => e.kind === 'window-closed')
   } else if (currentFilter === 'terminals') {
     filtered = filtered.filter((e) => isTerminalProcess(e.processName))
+  } else if (currentFilter === 'restorable') {
+    filtered = filtered.filter((e) => !isNonRestorableEvent(e))
+  } else if (currentFilter === 'non-restorable') {
+    filtered = filtered.filter((e) => isNonRestorableEvent(e))
   }
 
   return filtered
@@ -265,14 +292,20 @@ function renderFilmstrip() {
   visibleBatch.forEach((event, idx) => {
     const card = document.createElement('div')
     const isTerm = isTerminalProcess(event.processName)
-    card.className = `tm-card kind-${event.kind === 'window-closed' ? 'closed' : 'focus'} ${isTerm ? 'is-terminal' : ''}`
+    const isNonRestorable = isNonRestorableEvent(event)
+    card.className = `tm-card kind-${event.kind === 'window-closed' ? 'closed' : 'focus'} ${isTerm ? 'is-terminal' : ''} ${isNonRestorable ? 'is-non-restorable' : ''}`
     card.dataset.index = idx
 
     const boundsStr = event.bounds
       ? `${event.bounds.width}×${event.bounds.height} @ (${event.bounds.x}, ${event.bounds.y})`
       : 'Full Screen'
 
-    const stateBadgeHtml = event.hasFullState || isTerm
+    const stateBadgeHtml = isNonRestorable
+      ? `<div class="tm-state-badge" style="border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; background: rgba(245, 158, 11, 0.15);" title="Internal system UI or background process — resurrection disabled">
+           <span class="badge-icon">🔒</span>
+           <span>Non-Restorable</span>
+         </div>`
+      : (event.hasFullState || isTerm)
       ? `<div class="tm-state-badge" title="Full state (scrollback, environment, cwd) preserved">
            <span class="badge-icon">⚡</span>
            <span>Relaunchable</span>
@@ -298,10 +331,17 @@ function renderFilmstrip() {
         <div class="tm-card-desc">${escapeHtml(event.description || '')}</div>
       </div>
       <div class="tm-card-footer">
-        <button class="tm-action-btn jump-btn" title="Relaunch app and restore state">
-          <span>↶</span>
-          <span>${isTerm ? 'Resurrect Shell' : 'Jump Here'}</span>
-        </button>
+        ${
+          isNonRestorable
+            ? `<button class="tm-action-btn jump-btn" disabled style="opacity: 0.45; cursor: not-allowed;" title="Internal system UI component — resurrection disabled">
+                 <span>🔒</span>
+                 <span>View-Only</span>
+               </button>`
+            : `<button class="tm-action-btn jump-btn" title="Relaunch app and restore state">
+                 <span>↶</span>
+                 <span>${isTerm ? 'Resurrect Shell' : 'Jump Here'}</span>
+               </button>`
+        }
         <button class="tm-action-btn tm-copy-btn copy-ctx-btn" title="Copy window title and text">
           📋
         </button>
@@ -309,12 +349,14 @@ function renderFilmstrip() {
     `
 
     // Jump / Resurrect action
-    card.querySelector('.jump-btn').addEventListener('click', (e) => {
-      e.stopPropagation()
-      playResurrectSound()
-      showToast(`Resurrecting ${event.processName}...`)
-      ipcRenderer.send('restore-moment', event)
-    })
+    if (!isNonRestorable) {
+      card.querySelector('.jump-btn').addEventListener('click', (e) => {
+        e.stopPropagation()
+        playResurrectSound()
+        showToast(`Resurrecting ${event.processName}...`)
+        ipcRenderer.send('restore-moment', event)
+      })
+    }
 
     // Copy Context action
     card.querySelector('.copy-ctx-btn').addEventListener('click', (e) => {

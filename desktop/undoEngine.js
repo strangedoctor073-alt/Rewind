@@ -22,6 +22,7 @@ export function _setSpawnForTesting(fn) {
   spawnImpl = fn || nodeSpawn
 }
 import fs from 'node:fs'
+import path from 'node:path'
 import { sendCtrlZ, restoreWindowPosition, getActiveWindow, sanitizeNativeString } from './win32.js'
 
 export const UndoTier = {
@@ -68,9 +69,13 @@ export class UndoEngine {
       return false
     }
 
+    const isTerm = /^(cmd|powershell|pwsh|bash|wsl)\.exe$/i.test(processName || '') ||
+                   /^(cmd|powershell|pwsh|bash|wsl)\.exe$/i.test(cleanPath ? path.win32.basename(cleanPath) : '')
+    const useStart = usingFallback || (process.platform === 'win32' && isTerm)
+
     try {
-      const child = usingFallback
-        ? spawnImpl('cmd.exe', ['/c', 'start', '""', processName], {
+      const child = useStart
+        ? spawnImpl('cmd.exe', ['/c', 'start', '""', usingFallback ? processName : cleanPath], {
             detached: true,
             stdio: 'ignore',
             windowsHide: true,
@@ -85,7 +90,7 @@ export class UndoEngine {
       // Only meaningful for the direct-path launch: the fallback goes through
       // `cmd /c start`, whose own PID exits immediately and never matches the
       // relaunched app's window.
-      if (!usingFallback) {
+      if (!useStart) {
         let attempts = 0
         const pollTimer = setInterval(() => {
           attempts += 1

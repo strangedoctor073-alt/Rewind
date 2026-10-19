@@ -198,13 +198,13 @@ export class StateCaptureEngine {
           // If CMD, use /K to keep open and optionally display restore header
           if (shellExe.toLowerCase().endsWith('cmd.exe')) {
             const header = `[REWIND] Terminal state restored. Working directory: ${cwd}`
-            child = spawnFn('cmd.exe', ['/K', `title Restored Terminal && echo ${header}`], {
+            child = spawnFn('cmd.exe', ['/c', 'start', '""', 'cmd.exe', '/K', `title Restored Terminal && echo ${header}`], {
               cwd,
               detached: true,
               stdio: 'ignore',
             })
           } else {
-            child = spawnFn(shellExe, [], {
+            child = spawnFn('cmd.exe', ['/c', 'start', '""', shellExe], {
               cwd,
               detached: true,
               stdio: 'ignore',

@@ -96,15 +96,25 @@ export class TerminalAdapter {
     if (!cwd) return { ...base, unresolved: 'The window title does not show a working directory.' }
     if (!isSafeCwd(cwd)) return { ...base, unresolved: 'The directory path contains characters that are unsafe to pass to a terminal.' }
 
-    let isDir: boolean
+    let finalCwd = cwd
+    let isDir = false
     try {
-      isDir = ctx.fs.statSync(cwd).isDirectory()
+      const stat = ctx.fs.statSync(finalCwd)
+      if (stat.isDirectory()) {
+        isDir = true
+      } else if (stat.isFile() || finalCwd.toLowerCase().endsWith('.exe')) {
+        const parent = path.dirname(finalCwd)
+        if (isSafeCwd(parent) && ctx.fs.statSync(parent).isDirectory()) {
+          finalCwd = parent
+          isDir = true
+        }
+      }
     } catch {
       isDir = false
     }
     if (!isDir) return { ...base, unresolved: `"${cwd}" no longer exists.` }
 
-    const launch = buildTerminalLaunch(cwd, shell)
+    const launch = buildTerminalLaunch(finalCwd, shell)
     return launch ? { ...base, launch } : { ...base, unresolved: 'Could not build a safe terminal launch command.' }
   }
 }
