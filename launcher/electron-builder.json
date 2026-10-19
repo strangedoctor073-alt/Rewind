@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.rewind.launcher",
+  "productName": "REWIND Launcher",
+  "copyright": "Copyright © 2026 REWIND Authors",
+  "directories": {
+    "output": "../dist-launcher"
+  },
+  "electronDist": "../node_modules/electron/dist",
+  "electronVersion": "44.4.5",
+  "npmRebuild": false,
+  "files": [
+    "main.cjs",
+    "preload.cjs",
+    "renderer/**/*",
+    "package.json"
+  ],
+  "win": {
+    "icon": "../desktop/assets/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "REWIND Launcher",
+    "uninstallDisplayName": "REWIND Launcher",
+    "runAfterFinish": true,
+    "deleteAppDataOnUninstall": false,
+    "artifactName": "REWIND-Launcher-Setup-${version}.${ext}"
+  }
+}

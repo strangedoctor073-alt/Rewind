@@ -1,0 +1,14 @@
+{
+  "name": "rewind-launcher",
+  "version": "1.0.0",
+  "description": "REWIND Version Manager — pick and launch any REWIND release",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --config electron-builder.json"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  }
+}

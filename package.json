@@ -43,7 +43,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "pack": "npm run build && npm run build:daemon && npx electron-builder --dir",
-    "dist": "npm run build && npm run build:daemon && npx electron-builder"
+    "dist": "npm run build && npm run build:daemon && npx electron-builder",
+    "build:launcher": "cd launcher && npx electron-builder --config electron-builder.json"
   },
   "dependencies": {
     "@koromix/koffi-win32-x64": "^3.3.1",

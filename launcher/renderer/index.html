@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>REWIND Launcher</title>
+  <link rel="stylesheet" href="launcher.css" />
+</head>
+<body>
+
+  <!-- Custom title bar -->
+  <div class="titlebar" id="titlebar">
+    <div class="titlebar-left">
+      <span class="titlebar-logo">⏪</span>
+      <span class="titlebar-title">REWIND Launcher</span>
+    </div>
+    <div class="titlebar-actions">
+      <button class="tb-btn" id="btn-open-releases" title="Open GitHub Releases">↗</button>
+      <button class="tb-btn" id="btn-minimize" title="Minimize">–</button>
+      <button class="tb-btn danger" id="btn-close" title="Close">✕</button>
+    </div>
+  </div>
+
+  <!-- Main layout -->
+  <div class="layout">
+
+    <!-- Left: version list -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">Versions</span>
+        <button class="refresh-btn" id="btn-refresh" title="Refresh from GitHub">⟳</button>
+      </div>
+
+      <!-- Filter tabs -->
+      <div class="filter-tabs">
+        <button class="tab active" data-filter="all">All</button>
+        <button class="tab" data-filter="installed">Installed</button>
+        <button class="tab" data-filter="latest">Latest</button>
+      </div>
+
+      <div class="version-list" id="version-list">
+        <div class="loading-state" id="loading-state">
+          <div class="spinner"></div>
+          <span>Fetching releases…</span>
+        </div>
+      </div>
+
+      <div class="offline-banner" id="offline-banner" style="display:none">
+        ⚠ Offline — showing cached data
+      </div>
+    </div>
+
+    <!-- Right: version detail + launch -->
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-empty" id="detail-empty">
+        <div class="detail-empty-icon">⏪</div>
+        <div class="detail-empty-text">Select a version to install or launch</div>
+      </div>
+
+      <div class="detail-content" id="detail-content" style="display:none">
+        <div class="detail-header">
+          <div class="detail-tag" id="detail-tag"></div>
+          <div class="detail-name" id="detail-name"></div>
+          <div class="detail-meta" id="detail-meta"></div>
+        </div>
+
+        <div class="detail-notes-wrap">
+          <div class="detail-notes-label">Release Notes</div>
+          <div class="detail-notes" id="detail-notes"></div>
+        </div>
+
+        <!-- Download progress (hidden until downloading) -->
+        <div class="progress-wrap" id="progress-wrap" style="display:none">
+          <div class="progress-label" id="progress-label">Downloading…</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progress-bar-fill"></div>
+          </div>
+          <div class="progress-pct" id="progress-pct">0%</div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="detail-actions">
+          <button class="btn-launch" id="btn-launch" style="display:none">
+            ▶ Launch
+          </button>
+          <button class="btn-download" id="btn-download" style="display:none">
+            ⬇ Install This Version
+          </button>
+          <button class="btn-delete" id="btn-delete" style="display:none">
+            🗑 Remove
+          </button>
+          <div class="no-asset-msg" id="no-asset-msg" style="display:none">
+            No downloadable asset found for this release.
+            <a href="#" id="link-releases">View on GitHub ↗</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Status bar -->
+  <div class="statusbar">
+    <span id="status-text">Ready</span>
+    <span class="statusbar-right" id="statusbar-right"></span>
+  </div>
+
+  <script src="launcher.js"></script>
+</body>
+</html>
