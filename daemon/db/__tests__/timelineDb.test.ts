@@ -173,6 +173,21 @@ describe('TimelineDatabase', () => {
     expect(searchResults[0].id).toBe('c2')
   })
 
+  it('purgeOldMoments purges moments older than given days', () => {
+    const now = Date.now()
+    const sixDaysAgo = now - 6 * 24 * 60 * 60 * 1000
+    const fourDaysAgo = now - 4 * 24 * 60 * 60 * 1000
+
+    db.insertMoment({ id: 'm-old', timestamp: sixDaysAgo, appName: 'old.exe', windowTitle: 'old' })
+    db.insertMoment({ id: 'm-new', timestamp: fourDaysAgo, appName: 'new.exe', windowTitle: 'new' })
+
+    const result = db.purgeOldMoments(5)
+    expect(result.deletedCount).toBe(1)
+    expect(db.countMoments()).toBe(1)
+    expect(db.getMomentById('m-old')).toBeUndefined()
+    expect(db.getMomentById('m-new')).toBeDefined()
+  })
+
   it('checkpoint runs without error', () => {
     expect(() => db.checkpoint()).not.toThrow()
   })

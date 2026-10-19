@@ -441,12 +441,22 @@ export class TimelineDatabase {
       this.db.prepare('DELETE FROM moments WHERE timestamp < ?').run(cutoffMs)
       this.db.prepare('DELETE FROM browser_events WHERE timestamp < ?').run(cutoffMs)
       this.db.prepare('DELETE FROM clipboard_history WHERE timestamp < ?').run(cutoffMs)
-
       return {
         removed: old.length,
         screenshotPaths: old.map((m) => m.screenshotPath).filter((p): p is string => !!p),
       }
     })()
+  }
+
+  /**
+   * Retention: purge moments older than `retentionDays`.
+   * retentionDays <= 0 means Unlimited (no deletion).
+   */
+  public purgeOldMoments(retentionDays: number = 5): { deletedCount: number; screenshotPaths: string[] } {
+    if (retentionDays <= 0) return { deletedCount: 0, screenshotPaths: [] }
+    const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+    const res = this.purgeOlderThan(cutoffMs)
+    return { deletedCount: res.removed, screenshotPaths: res.screenshotPaths }
   }
 
   /** Fold the WAL into the main database file so it cannot grow unbounded. */

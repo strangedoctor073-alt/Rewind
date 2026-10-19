@@ -18,6 +18,13 @@ const TOKEN_KEY = 'rewind.daemonToken'
 
 export function getStoredToken(): string | null {
   try {
+    const desktopToken = typeof window !== 'undefined'
+      ? (window as unknown as { rewindStudio?: { getAuthToken?: () => string | null } }).rewindStudio?.getAuthToken?.()
+      : null
+    if (typeof desktopToken === 'string' && desktopToken.trim()) {
+      try { sessionStorage.setItem(TOKEN_KEY, desktopToken.trim()) } catch { /* ignore */ }
+      return desktopToken.trim()
+    }
     return sessionStorage.getItem(TOKEN_KEY)
   } catch {
     return null
@@ -117,4 +124,17 @@ export interface ResurrectReportView {
 
 export function resurrectWorkspace(momentId: string, dryRun: boolean): Promise<ResurrectReportView> {
   return callDaemon<ResurrectReportView>('timeline.resurrectWorkspace', { momentId, dryRun }, 30_000)
+}
+
+export interface RetentionSettings {
+  retentionDays: number
+  lastPurgedCount?: number
+}
+
+export function getRetentionSettings(): Promise<RetentionSettings> {
+  return callDaemon<RetentionSettings>('retention.getSettings')
+}
+
+export function setRetentionSettings(retentionDays: number): Promise<{ success: boolean; retentionDays: number; purgedCount: number }> {
+  return callDaemon<{ success: boolean; retentionDays: number; purgedCount: number }>('retention.setSettings', { retentionDays })
 }

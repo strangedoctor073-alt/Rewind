@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+    />
+    <link rel="stylesheet" href="splash.css" />
+    <title>REWIND</title>
+  </head>
+  <body>
+    <div class="splash-bg">
+      <!-- Ambient orbs -->
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+      <!-- Scanline overlay -->
+      <div class="scanlines"></div>
+    </div>
+
+    <div class="splash-card">
+      <!-- Inner glow pulse -->
+      <div class="glow-backdrop"></div>
+
+      <!-- Corner accents -->
+      <div class="corner corner-tl"></div>
+      <div class="corner corner-tr"></div>
+      <div class="corner corner-bl"></div>
+      <div class="corner corner-br"></div>
+
+      <!-- Brand logo block -->
+      <div class="brand-container">
+        <!-- Animated logo mark -->
+        <div class="logo-row">
+          <div class="logo-mark-wrap">
+            <div class="logo-mark-ring"></div>
+            <div class="logo-mark">R</div>
+          </div>
+          <h1 class="logo-wordmark">
+            <span class="letter" style="--i:0">R</span><span
+              class="letter"
+              style="--i:1">E</span><span class="letter" style="--i:2">W</span><span
+              class="letter"
+              style="--i:3">I</span><span class="letter" style="--i:4">N</span><span
+              class="letter"
+              style="--i:5">D</span>
+          </h1>
+        </div>
+
+        <!-- Tagline + attribution -->
+        <div class="tagline-block">
+          <span class="tagline-text">Universal Undo for your Desktop</span>
+          <div class="by-line">
+            <span class="by-tilde">~</span>
+            <span class="by-author">by Rohan</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress track -->
+      <div class="loader-track">
+        <div class="loader-bar"></div>
+      </div>
+
+      <!-- Status text -->
+      <div class="status-text" id="status-text">Booting Local Time Machine...</div>
+    </div>
+
+    <script>
+      // Cycle status messages for drama
+      const messages = [
+        'Booting Local Time Machine...',
+        'Waking the daemon...',
+        'Loading your timeline...',
+        'Ready.',
+      ]
+      let idx = 0
+      const el = document.getElementById('status-text')
+      const interval = setInterval(() => {
+        idx++
+        if (idx >= messages.length) {
+          clearInterval(interval)
+          return
+        }
+        el.style.opacity = '0'
+        setTimeout(() => {
+          el.textContent = messages[idx]
+          el.style.opacity = '1'
+        }, 200)
+      }, 600)
+    </script>
+  </body>
+</html>

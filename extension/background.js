@@ -463,3 +463,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 })
 
 void drainPending()
+
+// ── Daemon Liveness & Silent Auto-Capture ──────────────────────────────────
+const DAEMON_HEALTH_URL = 'http://127.0.0.1:48292/health'
+let isDaemonHealthy = false
+
+async function checkDaemonLiveness() {
+  if (typeof fetch !== 'function') return
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 1200)
+    const resp = await fetch(DAEMON_HEALTH_URL, { signal: controller.signal }).catch(() => null)
+    clearTimeout(timer)
+    isDaemonHealthy = Boolean(resp && resp.ok)
+    if (isDaemonHealthy) {
+      await autoEngageActiveTab()
+    }
+  } catch {
+    isDaemonHealthy = false
+  }
+}
+
+async function autoEngageActiveTab() {
+  try {
+    if (!chrome?.tabs?.query) return
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (!tab?.id || !tab.url?.startsWith('http')) return
+    const activeId = await getActiveSessionId(tab.id)
+    if (!activeId) {
+      await startRecording(tab).catch(() => {})
+    }
+  } catch {
+    // Silent auto-engage: must never throw or disrupt the browser
+  }
+}
+
+if (typeof setInterval === 'function') {
+  void checkDaemonLiveness()
+  setInterval(() => { void checkDaemonLiveness() }, 30_000)
+}
+

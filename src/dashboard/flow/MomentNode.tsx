@@ -12,8 +12,18 @@ interface MomentNodeProps {
   }
 }
 
+const isNonRestorableMoment = (moment: DashboardMoment): boolean => {
+  const name = moment.appName?.toLowerCase() || ''
+  if (!moment.processPath && !name) return true
+  if (name === 'searchapp.exe' || name === 'shellexperiencehost.exe' || name === 'startmenuexperiencehost.exe') {
+    return true
+  }
+  return false
+}
+
 export const MomentNode: React.FC<MomentNodeProps> = ({ data }) => {
   const { moment, isSelected, onSelect, onJump } = data
+  const isNonRestorable = isNonRestorableMoment(moment)
 
   const handleMouseEnter = () => {
     audioEngine.playTick(1.2)
@@ -21,13 +31,15 @@ export const MomentNode: React.FC<MomentNodeProps> = ({ data }) => {
 
   const handleJump = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (isNonRestorable) return
     audioEngine.playWhoosh()
     if (onJump) onJump(moment)
   }
 
   return (
     <div
-      className={`moment-node ${isSelected ? 'selected' : ''}`}
+      className={`moment-node ${isSelected ? 'selected' : ''} ${isNonRestorable ? 'non-restorable' : ''}`}
+      style={isNonRestorable ? { borderColor: 'rgba(251, 191, 36, 0.45)', opacity: 0.82 } : undefined}
       onClick={() => onSelect?.(moment)}
       onMouseEnter={handleMouseEnter}
     >
@@ -35,7 +47,25 @@ export const MomentNode: React.FC<MomentNodeProps> = ({ data }) => {
 
       <div className="moment-node-header">
         <span className="moment-node-badge">{moment.appName}</span>
-        <span className="moment-node-time">
+        {isNonRestorable && (
+          <span
+            style={{
+              fontSize: '0.65rem',
+              fontWeight: 600,
+              color: '#fbbf24',
+              background: 'rgba(251, 191, 36, 0.15)',
+              border: '1px solid rgba(251, 191, 36, 0.3)',
+              borderRadius: '4px',
+              padding: '1px 5px',
+              marginLeft: '4px',
+              cursor: 'help',
+            }}
+            title="System component or missing executable — resurrection disabled."
+          >
+            🛡️ Non-Restorable
+          </span>
+        )}
+        <span className="moment-node-time" style={{ marginLeft: 'auto' }}>
           {new Date(moment.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </span>
       </div>
@@ -62,9 +92,16 @@ export const MomentNode: React.FC<MomentNodeProps> = ({ data }) => {
         )}
         <button
           className="rewind-btn"
-          style={{ padding: '4px 10px', fontSize: '0.72rem', marginLeft: 'auto' }}
+          style={{
+            padding: '4px 10px',
+            fontSize: '0.72rem',
+            marginLeft: 'auto',
+            opacity: isNonRestorable ? 0.4 : 1,
+            cursor: isNonRestorable ? 'not-allowed' : 'pointer',
+          }}
           onClick={handleJump}
-          title="Relaunch application or bring to foreground"
+          disabled={isNonRestorable}
+          title={isNonRestorable ? 'Internal system UI component — resurrection disabled' : 'Relaunch application or bring to foreground'}
         >
           ↶ Jump
         </button>

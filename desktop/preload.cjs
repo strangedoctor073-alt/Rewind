@@ -16,6 +16,9 @@ const SEND_CHANNELS = new Set([
   'export-moment-gif',
   'get-checkpoints',
   'get-productivity-stats',
+  'hud-reset-timer',
+  'minimize-hud',
+  'open-dashboard',
   'reset-productivity-stats',
   'restore-checkpoint',
   'restore-moment',
@@ -32,6 +35,7 @@ const RECEIVE_CHANNELS = new Set([
   'delete-checkpoint-result',
   'export-backup-bundle-result',
   'export-moment-gif-result',
+  'fade-out-hud',
   'new-clipboard-item',
   'pause-state-changed',
   'productivity-stats-result',
@@ -39,6 +43,7 @@ const RECEIVE_CHANNELS = new Set([
   'restore-moment-result',
   'time-machine-state',
   'undo-result',
+  'wake-up-hud',
 ])
 
 contextBridge.exposeInMainWorld('rewind', {

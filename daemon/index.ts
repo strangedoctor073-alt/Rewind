@@ -105,6 +105,7 @@ export class RewindDaemon {
   private paused = false
   private authToken = ''
   private startedAt = 0
+  private lastPurgedCount = 0
 
   constructor(config: DaemonConfig = {}) {
     const gitRepoRoot = config.gitRepoRoot ?? process.cwd()
@@ -240,15 +241,18 @@ export class RewindDaemon {
   }
 
   /** Delete moments (and their screenshots) older than the retention window. */
-  private runRetention(): void {
-    if (!this.db || this.config.retentionDays <= 0) return
+  private runRetention(): { removed: number } {
+    if (!this.db || this.config.retentionDays <= 0) return { removed: 0 }
     try {
-      const { screenshotPaths } = this.db.purgeOlderThan(Date.now() - this.config.retentionDays * 24 * HOUR_MS)
+      const { removed, screenshotPaths } = this.db.purgeOlderThan(Date.now() - this.config.retentionDays * 24 * HOUR_MS)
       for (const file of screenshotPaths) {
         try { fs.rmSync(file, { force: true }) } catch { /* already gone */ }
       }
+      this.lastPurgedCount = removed
+      return { removed }
     } catch {
       // retention must never take the daemon down
+      return { removed: 0 }
     }
   }
 
@@ -547,6 +551,27 @@ export class RewindDaemon {
           moments,
           summaryType,
         })
+      }
+
+      case 'retention.getSettings': {
+        return {
+          retentionDays: this.config.retentionDays,
+          lastPurgedCount: this.lastPurgedCount,
+        }
+      }
+
+      case 'retention.setSettings': {
+        const days = boundedNumber(params.retentionDays, 0, 365)
+        if (days === undefined) {
+          throw { code: -32602, message: 'Invalid retentionDays: must be a number between 0 and 365 (0 = Unlimited)' }
+        }
+        this.config.retentionDays = days
+        const { removed } = this.runRetention()
+        return {
+          success: true,
+          retentionDays: this.config.retentionDays,
+          purgedCount: removed,
+        }
       }
 
       default:

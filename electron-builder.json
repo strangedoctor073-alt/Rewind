@@ -22,6 +22,7 @@
     "main": "desktop/main.js"
   },
   "win": {
+    "icon": "desktop/assets/icon.ico",
     "target": [
       {
         "target": "nsis",

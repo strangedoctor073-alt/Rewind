@@ -307,6 +307,20 @@ describe('RewindDaemon RPC method dispatch', () => {
     expect(res.modelUsed).toBeDefined()
   })
 
+  it('retention.getSettings returns retentionDays', async () => {
+    const res = await dispatch('retention.getSettings')
+    expect(res).toBeDefined()
+    expect(res.retentionDays).toBeDefined()
+    expect(typeof res.retentionDays).toBe('number')
+  })
+
+  it('retention.setSettings updates retentionDays and runs purge', async () => {
+    const res = await dispatch('retention.setSettings', { retentionDays: 7 })
+    expect(res.success).toBe(true)
+    expect(res.retentionDays).toBe(7)
+    expect(res.purgedCount).toBeDefined()
+  })
+
   it('unknown method throws METHOD_NOT_FOUND error', async () => {
     await expect(dispatch('bogus.method')).rejects.toMatchObject({ code: -32601 })
   })

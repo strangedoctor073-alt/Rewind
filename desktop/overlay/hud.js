@@ -14,6 +14,9 @@
 const ipcRenderer = window.rewind
 
 // Compact Pill DOM Elements
+const hudPill = document.querySelector('#hud-pill')
+const openStudioBtn = document.querySelector('#open-studio-btn')
+const minimizeHudBtn = document.querySelector('#minimize-hud-btn')
 const appBadge = document.querySelector('#app-badge')
 const windowTitle = document.querySelector('#window-title')
 const undoBtn = document.querySelector('#undo-btn')
@@ -870,6 +873,40 @@ ipcRenderer.on('undo-result', (_event, data) => {
     if (label) label.textContent = 'Undo'
     undoBtn.setAttribute('title', 'Undo change in active app (Ctrl+Z)')
   }, 1300)
+})
+
+// Studio Button click -> open Grand Dashboard
+if (openStudioBtn) {
+  openStudioBtn.addEventListener('click', () => {
+    ipcRenderer.send('open-dashboard')
+  })
+}
+
+// Minimize Button click -> hide HUD pill
+if (minimizeHudBtn) {
+  minimizeHudBtn.addEventListener('click', () => {
+    ipcRenderer.send('minimize-hud')
+  })
+}
+
+// HUD Auto-Hide & Wake-Up handling
+if (hudPill) {
+  hudPill.addEventListener('mouseenter', () => {
+    hudPill.classList.remove('hud-faded')
+    ipcRenderer.send('hud-reset-timer')
+  })
+}
+
+ipcRenderer.on('fade-out-hud', () => {
+  if (!isExpanded && hudPill) {
+    hudPill.classList.add('hud-faded')
+  }
+})
+
+ipcRenderer.on('wake-up-hud', () => {
+  if (hudPill) {
+    hudPill.classList.remove('hud-faded')
+  }
 })
 
 setInterval(() => {

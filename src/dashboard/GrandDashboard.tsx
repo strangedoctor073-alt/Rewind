@@ -14,12 +14,17 @@ import './dashboard.css'
 
 import { MomentNode } from './flow/MomentNode'
 import { ClusterNode } from './flow/ClusterNode'
+import { SessionSeparatorNode } from './flow/SessionSeparatorNode'
 import { FilmstripView } from './filmstrip/FilmstripView'
 import { CurtainDiff } from './diff/CurtainDiff'
 import { Omnibox } from './omnibox/Omnibox'
 import { InspectorDrawer } from './inspector/InspectorDrawer'
 import { TelemetryBar } from './telemetry/TelemetryBar'
 import { FocusTelemetryWidget } from './telemetry/FocusTelemetryWidget'
+import { CloseConfirmModal } from './components/CloseConfirmModal'
+import { ChromeOnboardingModal } from './components/ChromeOnboardingModal'
+import { AboutDeveloperModal } from './components/AboutDeveloperModal'
+import { RetentionSettingsModal } from './components/RetentionSettingsModal'
 import { audioEngine } from '../audio/synth'
 import type { DashboardMoment, DashboardViewMode, TelemetryStats } from './types'
 import { useDaemonRpc } from './hooks/useDaemonRpc'
@@ -88,6 +93,12 @@ export const GrandDashboard: React.FC = () => {
   const [selectedMomentId, setSelectedMomentId] = useState<string>('m3')
   const [isOmniboxOpen, setIsOmniboxOpen] = useState(false)
   const [isSoundMuted, setIsSoundMuted] = useState(audioEngine.isMuted())
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
+  const [isChromeModalOpen, setIsChromeModalOpen] = useState(false)
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false)
+  const [isRetentionModalOpen, setIsRetentionModalOpen] = useState(false)
+  const [prunedToast, setPrunedToast] = useState<string | null>(null)
+  const [collapsedSessions, setCollapsedSessions] = useState<Set<string>>(new Set())
 
   const selectedMoment = useMemo(
     () => moments.find((m) => m.id === selectedMomentId) || moments[0] || null,
@@ -116,44 +127,172 @@ export const GrandDashboard: React.FC = () => {
     () => ({
       moment: MomentNode,
       cluster: ClusterNode,
+      sessionSeparator: SessionSeparatorNode,
     }),
     []
   )
 
-  // Generate XYFlow nodes & edges from moments
-  const initialNodes: Node[] = useMemo(() => {
-    return moments.map((moment, idx) => ({
-      id: moment.id,
-      type: 'moment',
-      position: { x: 80 + idx * 300, y: 120 + (idx % 2) * 80 },
-      data: {
-        moment,
-        isSelected: moment.id === selectedMomentId,
-        onSelect: (m: DashboardMoment) => {
-          setSelectedMomentId(m.id)
-          audioEngine.playTick(1.1)
-        },
-        onJump: (m: DashboardMoment) => {
-          setSelectedMomentId(m.id)
-          audioEngine.playWhoosh()
-        },
-      },
-    }))
-  }, [moments, selectedMomentId])
+  const toggleSessionCollapse = useCallback((sessionId: string) => {
+    setCollapsedSessions((prev) => {
+      const next = new Set(prev)
+      if (next.has(sessionId)) next.delete(sessionId)
+      else next.add(sessionId)
+      return next
+    })
+  }, [])
 
-  const initialEdges: Edge[] = useMemo(() => {
-    const edges: Edge[] = []
-    for (let i = 0; i < moments.length - 1; i++) {
-      edges.push({
-        id: `e-${moments[i].id}-${moments[i + 1].id}`,
-        source: moments[i].id,
-        target: moments[i + 1].id,
-        animated: true,
-        style: { stroke: '#00f0ff', strokeWidth: 2 },
+  // Desktop Shell IPC Listeners (Close dialog, Pruned notification)
+  useEffect(() => {
+    const studio = (window as unknown as {
+      rewindStudio?: {
+        onShowCloseDialog?: (cb: () => void) => () => void
+        onPrunedNotification?: (cb: (count: number) => void) => () => void
+      }
+    }).rewindStudio
+
+    if (studio?.onShowCloseDialog) {
+      const unbind = studio.onShowCloseDialog(() => {
+        setIsCloseModalOpen(true)
+      })
+      return unbind
+    }
+  }, [])
+
+  useEffect(() => {
+    const studio = (window as unknown as {
+      rewindStudio?: {
+        onPrunedNotification?: (cb: (count: number) => void) => () => void
+      }
+    }).rewindStudio
+
+    if (studio?.onPrunedNotification) {
+      const unbind = studio.onPrunedNotification((count: number) => {
+        setPrunedToast(`Cleaned up ${count} old moments to preserve disk space`)
+        setTimeout(() => setPrunedToast(null), 5000)
+      })
+      return unbind
+    }
+  }, [])
+
+  const handleCloseConfirm = useCallback((action: 'minimize' | 'exit', remember: boolean) => {
+    setIsCloseModalOpen(false)
+    const studio = (window as unknown as {
+      rewindStudio?: {
+        sendCloseChoice?: (choice: { action: 'minimize' | 'exit'; remember: boolean }) => void
+      }
+    }).rewindStudio
+
+    if (studio?.sendCloseChoice) {
+      studio.sendCloseChoice({ action, remember })
+    }
+  }, [])
+
+  // Generate XYFlow nodes & edges from moments with collapsible session boundaries
+  const { initialNodes, initialEdges } = useMemo(() => {
+    const nodesList: Node[] = []
+    const edgesList: Edge[] = []
+    let currentX = 80
+    let lastMomentId: string | null = null
+
+    // Detect session breaks (> 40 minutes between moments)
+    const sessions: Array<{ id: string; label: string; moments: DashboardMoment[] }> = []
+    let currentSessionMoments: DashboardMoment[] = []
+    let currentSessionStart = moments[0]?.timestamp || 0
+
+    moments.forEach((m, idx) => {
+      if (idx > 0) {
+        const prev = moments[idx - 1]
+        const gap = Math.abs(prev.timestamp - m.timestamp)
+        if (gap > 40 * 60 * 1000) {
+          sessions.push({
+            id: `session-${currentSessionStart}`,
+            label: `Previous Session · ${new Date(currentSessionStart).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${new Date(currentSessionStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+            moments: currentSessionMoments,
+          })
+          currentSessionMoments = []
+          currentSessionStart = m.timestamp
+        }
+      }
+      currentSessionMoments.push(m)
+    })
+    if (currentSessionMoments.length > 0) {
+      sessions.push({
+        id: `session-${currentSessionStart}`,
+        label: `Current Session · ${new Date(currentSessionStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        moments: currentSessionMoments,
       })
     }
-    return edges
-  }, [moments])
+
+    sessions.forEach((sess, sIdx) => {
+      if (sIdx > 0) {
+        const isCollapsed = collapsedSessions.has(sess.id)
+        const sepNodeId = `sep-${sess.id}`
+        nodesList.push({
+          id: sepNodeId,
+          type: 'sessionSeparator',
+          position: { x: currentX, y: 150 },
+          data: {
+            sessionId: sess.id,
+            label: sess.label,
+            timestamp: sess.moments[0]?.timestamp || 0,
+            momentCount: sess.moments.length,
+            isCollapsed,
+            onToggleCollapse: toggleSessionCollapse,
+          },
+        })
+
+        if (lastMomentId) {
+          edgesList.push({
+            id: `e-${lastMomentId}-${sepNodeId}`,
+            source: lastMomentId,
+            target: sepNodeId,
+            animated: true,
+            style: { stroke: '#00f0ff', strokeWidth: 1.5, strokeDasharray: '4 4' },
+          })
+        }
+        lastMomentId = sepNodeId
+        currentX += 340
+
+        if (isCollapsed) {
+          return // Skip descendant moment nodes when collapsed!
+        }
+      }
+
+      sess.moments.forEach((moment, mIdx) => {
+        nodesList.push({
+          id: moment.id,
+          type: 'moment',
+          position: { x: currentX, y: 120 + (mIdx % 2) * 80 },
+          data: {
+            moment,
+            isSelected: moment.id === selectedMomentId,
+            onSelect: (m: DashboardMoment) => {
+              setSelectedMomentId(m.id)
+              audioEngine.playTick(1.1)
+            },
+            onJump: (m: DashboardMoment) => {
+              setSelectedMomentId(m.id)
+              audioEngine.playWhoosh()
+            },
+          },
+        })
+
+        if (lastMomentId) {
+          edgesList.push({
+            id: `e-${lastMomentId}-${moment.id}`,
+            source: lastMomentId,
+            target: moment.id,
+            animated: true,
+            style: { stroke: '#00f0ff', strokeWidth: 2 },
+          })
+        }
+        lastMomentId = moment.id
+        currentX += 300
+      })
+    })
+
+    return { initialNodes: nodesList, initialEdges: edgesList }
+  }, [moments, selectedMomentId, collapsedSessions, toggleSessionCollapse])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
@@ -287,6 +426,33 @@ export const GrandDashboard: React.FC = () => {
         <div className="gd-actions">
           <button
             className="rewind-btn"
+            onClick={() => setIsChromeModalOpen(true)}
+            title="Connect Chrome Extension for browser interaction recording"
+          >
+            🌐 Connect Chrome
+          </button>
+
+          <button
+            className="rewind-btn"
+            onClick={() => {
+              const studio = (window as unknown as { rewindStudio?: { toggleHud?: () => void } }).rewindStudio
+              if (studio?.toggleHud) studio.toggleHud()
+            }}
+            title="Toggle Floating HUD Pill (Ctrl+Alt+Z)"
+          >
+            ⚡ HUD
+          </button>
+
+          <button
+            className="rewind-btn"
+            onClick={() => setIsRetentionModalOpen(true)}
+            title="Configure Timeline Retention & Sweep Storage"
+          >
+            🧹 Retention
+          </button>
+
+          <button
+            className="rewind-btn"
             onClick={() => {
               setIsOmniboxOpen(true)
               audioEngine.playTick(1.2)
@@ -367,6 +533,59 @@ export const GrandDashboard: React.FC = () => {
       {/* Bottom Telemetry Bar */}
       <TelemetryBar stats={stats} />
 
+      {/* Floating Developer Badge (Opens About Rohan Gupta modal) */}
+      <button
+        onClick={() => setIsAboutModalOpen(true)}
+        className="rewind-btn"
+        style={{
+          position: 'fixed',
+          bottom: 12,
+          right: 14,
+          zIndex: 100,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 10px',
+          background: 'rgba(15, 23, 42, 0.92)',
+          border: '1px solid rgba(163, 230, 53, 0.4)',
+          borderRadius: '999px',
+          color: '#a3e635',
+          fontSize: '11px',
+          fontWeight: 700,
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5), 0 0 10px rgba(163, 230, 53, 0.2)',
+          cursor: 'pointer',
+        }}
+        title="About Developer: Rohan Gupta (Click for Bio & Links)"
+      >
+        <span>👤</span>
+        <span>About · Rohan Gupta</span>
+      </button>
+
+      {/* Retention Sweeper Toast Notification */}
+      {prunedToast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 60,
+            right: 20,
+            zIndex: 9998,
+            background: 'rgba(15, 23, 42, 0.95)',
+            border: '1px solid #00f0ff',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 240, 255, 0.2)',
+            borderRadius: '10px',
+            padding: '10px 16px',
+            fontSize: '12px',
+            color: '#f8fafc',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <span>🧹</span>
+          <span>{prunedToast}</span>
+        </div>
+      )}
+
       {/* Raycast-Style Omnibox Modal */}
       <Omnibox
         isOpen={isOmniboxOpen}
@@ -374,6 +593,32 @@ export const GrandDashboard: React.FC = () => {
         onClose={() => setIsOmniboxOpen(false)}
         onSelectMoment={handleSelectMoment}
         onToggleSound={handleToggleSound}
+      />
+
+      {/* Close Confirmation Modal */}
+      <CloseConfirmModal
+        isOpen={isCloseModalOpen}
+        onClose={() => setIsCloseModalOpen(false)}
+        onConfirm={handleCloseConfirm}
+      />
+
+      {/* Chrome Extension Onboarding Modal */}
+      <ChromeOnboardingModal
+        isOpen={isChromeModalOpen}
+        onClose={() => setIsChromeModalOpen(false)}
+      />
+
+      {/* About Developer Modal */}
+      <AboutDeveloperModal
+        isOpen={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
+      />
+
+      {/* Retention Settings Modal */}
+      <RetentionSettingsModal
+        isOpen={isRetentionModalOpen}
+        onClose={() => setIsRetentionModalOpen(false)}
+        onPruned={(count) => setPrunedToast(`Retention sweep: ${count} old moments pruned.`)}
       />
     </div>
   )

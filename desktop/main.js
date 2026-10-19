@@ -12,7 +12,9 @@
  * - 20-second atomic WAL auto-backup engine with crash recovery.
  */
 
-import { app, BrowserWindow, ipcMain, screen, globalShortcut, clipboard, safeStorage } from 'electron'
+import fs from 'node:fs'
+import os from 'node:os'
+import { app, BrowserWindow, ipcMain, screen, globalShortcut, clipboard, safeStorage, Tray, Menu, shell } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { initWin32, getActiveWindow, sendCtrlZ, isWindowAlive } from './win32.js'
@@ -30,6 +32,13 @@ import { StatsEngine } from './statsEngine.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 let hudWindow = null
+let dashboardWindow = null
+let splashWindow = null
+let tray = null
+let daemonProcess = null
+let isQuitting = false
+let closeChoice = null // 'minimize' | 'exit'
+let hudAutoHideTimer = null
 let backupEngine = null
 let clipboardEngine = null
 let statsEngine = null
@@ -55,6 +64,250 @@ let currentSession = {
   id: `session-${Date.now()}`,
   startedAt: new Date().toISOString(),
   events: [],
+}
+
+function readAuthToken() {
+  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local')
+  const tokenFile = path.join(localAppData, 'Rewind', 'auth.token')
+  try {
+    if (fs.existsSync(tokenFile)) {
+      return fs.readFileSync(tokenFile, 'utf8').trim()
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+async function ensureDaemonRunning() {
+  try {
+    const res = await fetch('http://127.0.0.1:48292/health', { signal: AbortSignal.timeout(1000) })
+    if (res.ok) {
+      console.log('[REWIND Main] Daemon already running on port 48292.')
+      return
+    }
+  } catch {
+    // offline, spawn daemon
+  }
+
+  const daemonDistPath = path.join(__dirname, '..', 'dist-daemon', 'daemon', 'main.js')
+  if (!fs.existsSync(daemonDistPath)) {
+    console.warn('[REWIND Main] dist-daemon not found, daemon auto-spawn skipped.')
+    return
+  }
+
+  console.log(`[REWIND Main] Auto-spawning daemon: ${daemonDistPath}`)
+  const { spawn } = await import('node:child_process')
+  try {
+    const isElectron = Boolean(process.versions.electron)
+    const execPath = isElectron ? process.execPath : 'node'
+    const env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+    daemonProcess = spawn(execPath, [daemonDistPath], {
+      detached: true,
+      stdio: 'ignore',
+      env,
+      windowsHide: true,
+    })
+    daemonProcess.unref()
+
+    // Poll health check for up to 4s
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 200))
+      try {
+        const res = await fetch('http://127.0.0.1:48292/health', { signal: AbortSignal.timeout(800) })
+        if (res.ok) {
+          console.log('[REWIND Main] Daemon health check passed.')
+          break
+        }
+      } catch {
+        // still spinning up
+      }
+    }
+  } catch (err) {
+    console.warn('[REWIND Main] Could not spawn daemon process:', err)
+  }
+}
+
+function createSplashScreen() {
+  splashWindow = new BrowserWindow({
+    width: 380,
+    height: 220,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    hasShadow: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+
+  splashWindow.loadFile(path.join(__dirname, 'splash', 'splash.html'))
+  splashWindow.center()
+
+  splashWindow.on('closed', () => {
+    splashWindow = null
+  })
+}
+
+function createDashboardWindow() {
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { width, height } = primaryDisplay.workAreaSize
+
+  dashboardWindow = new BrowserWindow({
+    width: Math.min(1280, width - 40),
+    height: Math.min(820, height - 60),
+    title: 'REWIND Studio',
+    backgroundColor: '#0a0e17',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'dashboardPreload.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+    },
+  })
+
+  dashboardWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
+  const distHtml = path.join(__dirname, '..', 'dist', 'index.html')
+  if (fs.existsSync(distHtml)) {
+    dashboardWindow.loadFile(distHtml)
+  } else {
+    dashboardWindow.loadURL('http://localhost:5173').catch(() => {
+      dashboardWindow.loadFile(path.join(__dirname, 'overlay', 'index.html'))
+    })
+  }
+
+  dashboardWindow.on('close', (event) => {
+    if (isQuitting) return
+    if (closeChoice === 'minimize') {
+      event.preventDefault()
+      dashboardWindow.hide()
+    } else if (closeChoice === 'exit') {
+      // allow window to close and app to quit
+    } else {
+      event.preventDefault()
+      dashboardWindow.webContents.send('show-close-dialog')
+    }
+  })
+
+  dashboardWindow.on('closed', () => {
+    dashboardWindow = null
+  })
+}
+
+function startHudAutoHideCountdown() {
+  if (hudAutoHideTimer) clearTimeout(hudAutoHideTimer)
+  hudAutoHideTimer = setTimeout(() => {
+    if (hudWindow && !hudWindow.isDestroyed() && !isTimeMachineExpanded) {
+      hudWindow.webContents.send('fade-out-hud')
+    }
+  }, 5000)
+}
+
+function wakeUpHud() {
+  if (hudAutoHideTimer) {
+    clearTimeout(hudAutoHideTimer)
+    hudAutoHideTimer = null
+  }
+  if (hudWindow && !hudWindow.isDestroyed()) {
+    hudWindow.webContents.send('wake-up-hud')
+  }
+}
+
+function togglePrivacyPause(rawMinutes = 15) {
+  const minutes = sanitizePauseMinutes(rawMinutes)
+  if (isPaused) {
+    isPaused = false
+    if (pauseTimeout) clearTimeout(pauseTimeout)
+    pauseTimeout = null
+  } else {
+    isPaused = true
+    if (pauseTimeout) clearTimeout(pauseTimeout)
+    pauseTimeout = setTimeout(() => {
+      isPaused = false
+      pauseTimeout = null
+      // Auto-resume must also wake the clipboard engine
+      if (clipboardEngine) clipboardEngine.setPaused(false)
+      if (hudWindow && !hudWindow.isDestroyed()) {
+        hudWindow.webContents.send('pause-state-changed', { isPaused: false })
+      }
+    }, minutes * 60 * 1000)
+  }
+
+  if (clipboardEngine) clipboardEngine.setPaused(isPaused)
+  if (hudWindow && !hudWindow.isDestroyed()) {
+    hudWindow.webContents.send('pause-state-changed', { isPaused })
+  }
+}
+
+function createTray() {
+  try {
+    const iconPath = path.join(__dirname, 'assets', 'icon.png')
+    if (fs.existsSync(iconPath)) {
+      tray = new Tray(iconPath)
+      const contextMenu = Menu.buildFromTemplate([
+        {
+          label: 'Open REWIND Studio',
+          click: () => {
+            if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+              dashboardWindow.show()
+              dashboardWindow.focus()
+            }
+          },
+        },
+        {
+          label: 'Toggle HUD (Ctrl+Alt+Z)',
+          click: () => {
+            if (hudWindow && !hudWindow.isDestroyed()) {
+              if (hudWindow.isVisible()) {
+                toggleTimeMachine()
+              } else {
+                hudWindow.show()
+                wakeUpHud()
+              }
+            }
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Pause Tracking (15m)',
+          click: () => togglePrivacyPause(15),
+        },
+        {
+          label: 'Pause Tracking (1h)',
+          click: () => togglePrivacyPause(60),
+        },
+        {
+          label: 'Resume Tracking',
+          click: () => {
+            if (isPaused) togglePrivacyPause(15)
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Exit REWIND Completely',
+          click: () => {
+            isQuitting = true
+            app.quit()
+          },
+        },
+      ])
+      tray.setToolTip('REWIND Time Machine')
+      tray.setContextMenu(contextMenu)
+      tray.on('click', () => {
+        if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+          dashboardWindow.show()
+          dashboardWindow.focus()
+        }
+      })
+    }
+  } catch (err) {
+    console.warn('[REWIND Tray] Tray creation skipped:', err)
+  }
 }
 
 function createOverlayHUD() {
@@ -119,6 +372,7 @@ function setOverlayExpanded(expand) {
 }
 
 function toggleTimeMachine() {
+  wakeUpHud()
   setOverlayExpanded(!isTimeMachineExpanded)
 }
 
@@ -171,6 +425,7 @@ function runMonitorCycle() {
 
     // Check for window change or window closure
     if (!lastActiveWindow || lastActiveWindow.hwnd !== current.hwnd) {
+      startHudAutoHideCountdown()
       const sanitizedTitle = sanitizeWindowTitle(current.title)
 
       // If the previous window closed/switched, record closure with full state if applicable
@@ -319,9 +574,27 @@ app.whenReady().then(() => {
     }
   })
 
-  // Launch always-on-top HUD
-  createOverlayHUD()
-  startWindowMonitor()
+  // Show animated glassmorphic splash screen
+  createSplashScreen()
+
+  // Auto-boot background daemon and start Hybrid Windows
+  ensureDaemonRunning().finally(() => {
+    createDashboardWindow()
+    createOverlayHUD()
+    startWindowMonitor()
+    createTray()
+
+    // Smooth transition from Splash to Studio (1.8s duration)
+    setTimeout(() => {
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.close()
+      }
+      if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+        dashboardWindow.show()
+        dashboardWindow.focus()
+      }
+    }, 1800)
+  })
 
   // Register Global Shortcut: Ctrl+Alt+Z
   try {
@@ -520,36 +793,82 @@ app.whenReady().then(() => {
 
   // IPC listener for Privacy Pause
   ipcMain.on('toggle-privacy-pause', (event, rawMinutes) => {
-    const minutes = sanitizePauseMinutes(rawMinutes)
-    if (isPaused) {
-      isPaused = false
-      if (pauseTimeout) clearTimeout(pauseTimeout)
-      pauseTimeout = null
-    } else {
-      isPaused = true
-      if (pauseTimeout) clearTimeout(pauseTimeout)
-      pauseTimeout = setTimeout(() => {
-        isPaused = false
-        pauseTimeout = null
-        // Auto-resume must also wake the clipboard engine; before, it stayed
-        // paused forever after the timer fired.
-        if (clipboardEngine) clipboardEngine.setPaused(false)
-        if (hudWindow && !hudWindow.isDestroyed()) {
-          hudWindow.webContents.send('pause-state-changed', { isPaused: false })
-        }
-      }, minutes * 60 * 1000)
-    }
-
-    if (clipboardEngine) clipboardEngine.setPaused(isPaused)
+    togglePrivacyPause(rawMinutes)
     event.reply('pause-state-changed', { isPaused })
+  })
+
+  // IPC listeners for Studio & HUD integration
+  ipcMain.on('get-daemon-token-sync', (event) => {
+    event.returnValue = readAuthToken()
+  })
+
+  ipcMain.on('get-extension-path-sync', (event) => {
+    event.returnValue = path.join(__dirname, '..', 'extension')
+  })
+
+  ipcMain.on('open-dashboard', () => {
+    if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+      dashboardWindow.show()
+      dashboardWindow.focus()
+    }
+  })
+
+  ipcMain.on('minimize-hud', () => {
+    if (hudWindow && !hudWindow.isDestroyed()) {
+      hudWindow.hide()
+    }
+  })
+
+  ipcMain.on('toggle-hud', () => {
+    if (hudWindow && !hudWindow.isDestroyed()) {
+      if (hudWindow.isVisible()) {
+        hudWindow.hide()
+      } else {
+        hudWindow.show()
+        wakeUpHud()
+      }
+    }
+  })
+
+  ipcMain.on('hud-reset-timer', () => {
+    wakeUpHud()
+  })
+
+  ipcMain.on('studio-close-action', (_event, choice) => {
+    if (choice?.remember) {
+      closeChoice = choice.action
+    }
+    if (choice?.action === 'minimize') {
+      if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+        dashboardWindow.hide()
+      }
+    } else if (choice?.action === 'exit') {
+      isQuitting = true
+      app.quit()
+    }
+  })
+
+  ipcMain.on('open-chrome-extensions', () => {
+    shell.openExternal('chrome://extensions')
   })
 })
 
 app.on('will-quit', () => {
+  isQuitting = true
+  if (daemonProcess) {
+    try {
+      daemonProcess.kill()
+    } catch {
+      // best effort
+    }
+  }
   globalShortcut.unregisterAll()
 })
 
 app.on('window-all-closed', () => {
+  if (closeChoice === 'minimize' && !isQuitting) {
+    return
+  }
   if (backupEngine) backupEngine.stop()
   if (clipboardEngine) clipboardEngine.stop()
   if (process.platform !== 'darwin') {

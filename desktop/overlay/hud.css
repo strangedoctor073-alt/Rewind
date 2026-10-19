@@ -61,6 +61,15 @@ html, body {
   border-color: rgba(217, 255, 88, 0.35);
 }
 
+.hud-pill.hud-faded {
+  opacity: 0.15;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hud-pill.hud-faded:hover {
+  opacity: 1;
+}
+
 .drag-handle {
   display: flex;
   align-items: center;
@@ -197,6 +206,34 @@ html, body {
   color: #ffffff;
   border-color: var(--accent-indigo);
   box-shadow: 0 0 12px rgba(129, 140, 248, 0.45);
+}
+
+.hud-studio {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(129, 140, 248, 0.35);
+  color: #a5b4fc;
+}
+
+.hud-studio:hover {
+  background: #6366f1;
+  color: #ffffff;
+  border-color: #818cf8;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
+}
+
+.hud-minimize {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  padding: 3px 6px;
+  font-size: 10px;
+}
+
+.hud-minimize:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  box-shadow: none;
 }
 
 .hud-pause.paused {
