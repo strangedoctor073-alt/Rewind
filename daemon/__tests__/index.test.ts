@@ -31,6 +31,7 @@ vi.mock('../db/timelineDb.js', () => {
     this.getClipboardHistory = vi.fn(() => [{ id: 'clip-1', contentText: 'hello world', timestamp: 1234567 }])
     this.searchClipboard = vi.fn(() => [{ id: 'clip-1', contentText: 'hello world', timestamp: 1234567 }])
     this.insertMoment = vi.fn()
+    this.getWalStatus = vi.fn(() => 'clean')
     this.close = vi.fn()
   }) as unknown as new (...args: unknown[]) => { getMoments: () => []; searchFts: () => []; close: () => void }
   return { TimelineDatabase }
@@ -319,6 +320,15 @@ describe('RewindDaemon RPC method dispatch', () => {
     expect(res.success).toBe(true)
     expect(res.retentionDays).toBe(7)
     expect(res.purgedCount).toBeDefined()
+  })
+
+  it('analytics.telemetryStats reports computed metrics and real walStatus', async () => {
+    const res = await dispatch('analytics.telemetryStats')
+    expect(res).toBeDefined()
+    expect(typeof res.focusScore).toBe('number')
+    expect(typeof res.momentsRecorded).toBe('number')
+    expect(typeof res.walStatus).toBe('string')
+    expect(['clean', 'memory', 'busy', 'pending']).toContain(res.walStatus)
   })
 
   it('unknown method throws METHOD_NOT_FOUND error', async () => {

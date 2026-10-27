@@ -364,7 +364,7 @@ function App() {
           </div>
           <button onClick={() => importInput.current?.click()}>Import recording</button>
         </nav>
-        <footer><a href="#about">About REWIND</a><button className="link-button" onClick={clearLocalData}>Clear local data</button><p>v0.2.0 / Local-first</p></footer>
+        <footer><a href="#about">About REWIND</a><button className="link-button" onClick={clearLocalData}>Clear local data</button><p>v6.0.0 / Local-first</p></footer>
       </aside>
       <div className="content">
         <div className="title-row">

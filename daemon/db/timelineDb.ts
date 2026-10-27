@@ -464,6 +464,27 @@ export class TimelineDatabase {
     this.db.pragma('wal_checkpoint(PASSIVE)')
   }
 
+  /** Query SQLite WAL state via wal_checkpoint(PASSIVE). */
+  public getWalStatus(): string {
+    try {
+      const mode = this.db.pragma('journal_mode', { simple: true })
+      if (mode === 'memory') {
+        return 'memory'
+      }
+      if (mode !== 'wal') {
+        return 'disabled'
+      }
+      const rows = this.db.pragma('wal_checkpoint(PASSIVE)') as Array<{ busy: number; log: number; checkpointed: number }> | { busy: number; log: number; checkpointed: number }
+      const status = Array.isArray(rows) ? rows[0] : rows
+      if (!status) return 'clean'
+      if (status.busy !== 0) return 'busy'
+      if (status.log > status.checkpointed) return 'pending'
+      return 'clean'
+    } catch {
+      return 'unknown'
+    }
+  }
+
   public close(): void {
     this.db.close()
   }

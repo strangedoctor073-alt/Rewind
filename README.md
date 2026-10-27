@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <strong>A local-first window-activity timeline, universal-undo hotkey and in-browser interaction recorder.</strong><br />
-  Jump back through the apps and windows you used, relaunch what you closed, recover clipboard text you overwrote, and record &amp; replay web sessions. Everything stays on your machine.
+  <strong>A local-first window-activity timeline, app-level undo hotkey, and in-browser interaction recorder.</strong><br />
+  Jump back through the apps and windows you used, relaunch what you closed, and record &amp; replay web sessions. Everything stays on your machine.
 </p>
 
 <p align="center">
@@ -20,17 +20,16 @@
 
 ---
 
-## What's New in REWIND v5 (v5.10.1 Final Polish) ⚡
+## What's New in REWIND v6.0
 
-- **Deep Workspace Resurrection**: Reopen VS Code/Cursor files, Windows Terminal directories, and browser tabs with pixel-perfect multi-monitor window geometry placement (`rewind resurrect <momentId> [--dry-run]` or dashboard **⚡ Resurrect Workspace**).
-- **Automated Macro Exporters**:
+- **Deep Workspace Resurrection**: Reopen VS Code/Cursor files, Windows Terminal directories, and browser tabs with best-effort multi-monitor window geometry placement (`rewind resurrect <momentId> [--dry-run]` or dashboard **⚡ Resurrect Workspace**). Note: Geometry restoration is best-effort and terminal resurrection re-opens the directory without restoring shell command output or history.
+- **Automated Macro Exporters (Labs)**:
   - `rewind macro export --format playwright --output flow.spec.ts`: Turn recorded web sessions into clean, runnable Playwright tests with automatic environment-variable secret masking (`process.env.SECRET`).
   - `rewind macro export --format powershell --output script.ps1`: Generate idempotent PowerShell automation with elevation checks and secure string masking.
-- **Cognitive Standup & AI Synthesizer**: Generate daily standup summaries, timesheet activity logs, and commit drafts powered by Ollama (`ai.standup` RPC with heuristic offline fallback).
+- **Cognitive Standup & AI Synthesizer (Labs)**: Generate daily standup summaries, timesheet activity logs, and commit drafts powered by Ollama (`ai.standup` RPC with heuristic offline fallback). Requires a running local Ollama instance on port 11434.
 - **Focus & Productivity Intelligence**: Deep Focus score (0–100), context-switch velocity, distraction spike detection, and 24h interactive activity heatmaps via `FocusTelemetryWidget.tsx` and `rewind status`.
 - **Client-Side Encrypted Timeline Vaults**: `rewind vault create <file.vault>` / `rewind vault restore <file.vault>` — AES-256-GCM + PBKDF2 (600k rounds per OWASP guidelines) encrypted timeline backups with gzip compression.
-- **Unified Multi-Format Clipboard History**: FTS full-text search across clipboard text, HTML, and rich format entries with real-time Ghost Shield entropy redaction (`clipboard.history` and `clipboard.search` RPCs).
-- **Windows Packaging & Distribution**: Standard NSIS installer (`.exe`) with dual-mode per-user/per-machine installation and standalone portable executables via `npm run dist`.
+- **Fail-Closed State Encryption**: State blobs use OS-protected keys (Electron `safeStorage` / DPAPI on Windows). The system refuses to store sensitive state if the secure store is unavailable rather than degrading to weak obfuscation.
 - Full detailed evolution and fixes: [CHANGELOG.md](CHANGELOG.md).
 
 
@@ -38,7 +37,7 @@
 
 - **Headless Background Daemon & CLI (`rewind`)**: Run completely headless in the background with JSON-RPC over Named Pipes and TCP. Full control via `rewind start/stop/status/capture/search/autostart`.
 - **Native Framebuffer Capture & 64-bit dHash**: Captures window framebuffers via Win32 `PrintWindow` with gradient difference hashing to eliminate idle duplicate frames.
-- **SQLite + FTS5 Full-Text Search**: Embedded, zero-cloud timeline database with instant sub-millisecond search across applications, OCR tokens, and browser DOM events.
+- **SQLite + FTS5 Full-Text Search**: Embedded, zero-cloud timeline database with fast full-text search across applications and browser DOM events.
 - **Grand Dashboard Studio**: Cyber-minimalist visual node graph powered by `@xyflow/react`, Filmstrip scrubber, Curtain Diff visual comparator, and `Ctrl+K` Omnibox.
 - **Procedural Web Audio Engine**: Zero-asset procedural oscillator synthesizer for mechanical ticks, sweeps, and hotkey feedback.
 - **Stability & Anti-Freeze Hardening**: Native `IsHungAppWindow` protection so deadlocked target applications never lock up REWIND.
@@ -51,7 +50,7 @@
 | :--- | :--- | :--- |
 | **REWIND CLI & Daemon** | Headless background capture, SQLite search, and autostart | `npm run cli -- help` or `rewind start` |
 | **Grand Dashboard Studio** | Interactive node graph, Curtain Diff, and Filmstrip | `npm run dev` |
-| **Desktop Floating HUD** | Always-on-top pill and overlay with universal undo | `npm run desktop` |
+| **Desktop Floating HUD** | Always-on-top pill and overlay with app-level undo | `npm run desktop` |
 | **Chrome MV3 Extension** | Browser DOM interaction recorder & scroll restoration | `npm run build:extension` |
 
 ---
@@ -61,13 +60,13 @@
 **1. Headless Daemon & Local Storage (`daemon/`)**
 - Runs in the background, recording window switches, active window bounds, and git branch context.
 - Stores historical events in SQLite (`%LOCALAPPDATA%\Rewind\timeline.db`) in WAL mode with FTS5 search.
-- Dual-transport RPC server (`127.0.0.1:48291` and `\\.\pipe\rewind-daemon-rpc`, newline-delimited JSON-RPC, not HTTP) protected by 256-bit authentication tokens, plus an authenticated HTTP bridge on `127.0.0.1:48292` for the dashboard.
+- Dual-transport RPC server (`127.0.0.1:48291` and `\\.\pipe\rewind-daemon-rpc`, newline-delimited JSON-RPC, not HTTP) protected by 256-bit authentication tokens, plus an authenticated HTTP bridge on `127.0.0.1:48292` for the dashboard and extension.
 - Start it with `npm run build:daemon && rewind start` (or `npm run daemon` to run it in the foreground and see errors).
 
 **2. Desktop Time Machine (`desktop/`)**
 - Floating HUD pill expandable to a full Time Machine dashboard via global `Ctrl+Alt+Z`.
-- Relaunch closed applications with preserved positions; resurrect terminal sessions.
-- Universal Undo (`Ctrl+Z`) verified with a 500ms foreground switch handshake (terminal processes excluded to prevent suspension).
+- Relaunch closed applications with preserved positions; resurrect terminal sessions in their last working directory (shell history and command outputs are not restored).
+- App-Level Undo (`Ctrl+Z`) verified with a 500ms foreground switch handshake (terminal processes excluded to prevent sending break/suspend signals).
 - 20-second atomic WAL auto-backup and encrypted snapshot export.
 
 **3. In-Browser Interaction Recording (`extension/`)**
@@ -144,20 +143,30 @@ Open `http://localhost:5173/` to try timeline scrubbing, undo/redo (`Ctrl/Cmd+Z`
 
 ## Privacy & security model
 
-- **Zero External Network Calls**: No telemetry, no cloud servers, no user accounts. Internal communication is strictly restricted to local loopback interfaces (`127.0.0.1:48291` JSON-RPC and `127.0.0.1:48292` HTTP bridge, plus optional local Ollama on `127.0.0.1:11434`). The overlay's Content-Security-Policy blocks all network access (`connect-src 'none'`).
+- **Zero External Network Calls**: No telemetry, no cloud servers, no user accounts. Internal communication is strictly restricted to local loopback interfaces (`127.0.0.1:48291` JSON-RPC and `127.0.0.1:48292` HTTP bridge, plus optional local Ollama on `127.0.0.1:11434`). The overlay's Content-Security-Policy blocks all network access (`connect-src 'none'`). Note: Loopback connections are local network sockets; the extension communicates with the daemon via this loopback HTTP bridge.
 - **No Global Keylogging**: The desktop application never installs global OS keyboard hooks (`WH_KEYBOARD_LL`). The only synthetic keystroke REWIND dispatches is `Ctrl+Z` to trigger application-level Undo after focus verification (terminals and shells are excluded).
 - **Extension Input Recording & Masking**: The browser extension records user interactions in active tabs into `chrome.storage.local`. Sensitive form inputs (passwords, credit card numbers, CVVs, SSNs, 2FA/OTP tokens) are masked (`[masked]`) via best-effort heuristic denylists. Plaintext credentials should never be typed into custom unmasked fields during recorded sessions.
-- **Local Framebuffers & OCR**: Window framebuffer previews captured via Win32 `PrintWindow` for perceptual hashing (dHash) and OCR tokens remain entirely local on disk and are never uploaded.
+- **Screenshots & Window Framebuffers**: When capture is enabled, window framebuffer previews are captured via Win32 `PrintWindow` for thumbnail previews and perceptual hashing (dHash). All frame data is stored locally in the user data directory and is never transmitted off-device.
 - **Fail-Closed State Encryption**: Saved state blobs are encrypted with AES-256-GCM using keys protected by the OS secure store (Electron `safeStorage` / DPAPI on Windows). If the secure store is unavailable, REWIND fails closed rather than degrading to weak fallback obfuscation.
 - **Sandboxed Overlay**: The overlay renderer is sandboxed (`contextIsolation: true`, `nodeIntegration: false`) and communicates only through an allow-listed IPC bridge. The main process resolves restore requests from its own internal timeline.
 - See [SECURITY.md](SECURITY.md) for vulnerability reporting and detailed security architecture.
 
 ---
 
+## Known Limitations
+
+- **Windows Platform Requirement**: The desktop capture engine relies on Win32 FFI via Koffi and Windows-specific system APIs (`GetWindowTextW`, `PrintWindow`, `QueryFullProcessImageNameW`). Linux and macOS desktop capture is not currently supported; the test suite mocks these Win32 APIs for cross-platform CI verification.
+- **No Shell Output or History Resurrection**: Resurrecting a terminal or shell window re-opens the terminal executable in the recorded working directory. Terminal scrollback history, command outputs, active REPLs, and background subprocesses cannot be re-instantiated.
+- **Best-Effort Window Placement**: Multi-monitor geometry restoration maps window coordinates across monitors. Because DPI scale factors, taskbars, and virtual desktop configurations vary, resurrected windows may occasionally be repositioned by Windows OS window managers.
+- **Undo is Target-Dependent**: Universal Undo sends synthetic `Ctrl+Z` to the verified target application. If the target application does not implement Undo or handles `Ctrl+Z` differently, REWIND cannot force an undo. Terminals and consoles are explicitly excluded to prevent sending ASCII `0x1A` (substitute / SIGTSTP).
+- **Heuristic Privacy Masking**: Extension field masking uses regex and attribute heuristics. Custom web inputs (e.g., canvas-based or custom web components without standard accessibility attributes) might not trigger masking. Do not record while entering sensitive passwords or credentials.
+
+---
+
 ## Development & Testing
 
 ```bash
-npm test          # 331 tests across 47 suites (Vitest)
+npm test          # 269 tests across 39 suites (Vitest)
 npm run lint      # ESLint (0 errors, 0 warnings)
 npm run build     # typecheck + web build
 npm run build:daemon

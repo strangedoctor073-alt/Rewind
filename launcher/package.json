@@ -1,6 +1,6 @@
 {
   "name": "rewind-launcher",
-  "version": "1.0.0",
+  "version": "6.0.0",
   "description": "REWIND Version Manager — pick and launch any REWIND release",
   "main": "main.cjs",
   "scripts": {

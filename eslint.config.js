@@ -6,8 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  // `dist-daemon`, `dist-electron`, and `extension/assets` are build outputs
-  globalIgnores(['dist', 'dist-daemon', 'dist-electron', 'extension/assets']),
+  // `dist-daemon`, `dist-electron`, and `extension/assets` are build outputs; `experimental` contains quarantined modules
+  globalIgnores(['dist', 'dist-daemon', 'dist-electron', 'extension/assets', 'experimental']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

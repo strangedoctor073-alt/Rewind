@@ -452,8 +452,6 @@ export class RewindDaemon {
           windowTitle: String(r.window_title ?? ''),
           gitBranch: typeof r.git_branch === 'string' ? r.git_branch : null,
           phash: typeof r.phash === 'string' ? r.phash : null,
-          // Truncate OCR text to avoid oversized exports
-          ocrText: typeof r.ocr_text === 'string' ? r.ocr_text.slice(0, 200) : null,
         }))
 
         return {
@@ -524,6 +522,7 @@ export class RewindDaemon {
         let contextSwitchesPerHour = 0
         let activeSessionDurationMinutes = 0
         const momentsRecorded = this.db ? this.db.countMoments() : 0
+        const walStatus = typeof this.db?.getWalStatus === 'function' ? this.db.getWalStatus() : 'clean'
 
         if (this.db) {
           const moments = this.db.getMoments({ limit: 100 }).map(rowToDbMoment)
@@ -537,7 +536,7 @@ export class RewindDaemon {
           focusScore,
           contextSwitchesPerHour,
           activeSessionDurationMinutes,
-          walStatus: 'clean',
+          walStatus,
           momentsRecorded,
         }
       }

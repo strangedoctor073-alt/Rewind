@@ -30,4 +30,6 @@ We aim to acknowledge a report within seven days and to coordinate a fix before 
 Recordings can contain interaction data. Do not record passwords, payment details, private messages or other sensitive information.
 - The browser extension masks sensitive input fields (`type="password"`, `autocomplete` tokens, and field names/labels matching credit cards, passwords, SSNs, CVVs, 2FA/OTP tokens).
 - The desktop app detects and pauses capture on known password manager titles/processes and private/incognito windows.
+- **Screenshots & Window Previews**: When capture is enabled, local window framebuffers are captured via Win32 `PrintWindow` for thumbnail display and perceptual difference hashing. All images are stored strictly on the local machine and are never transmitted externally.
+- **Terminal & Shell Boundary**: Terminal scrollback buffers and interactive shell command outputs are not recorded. Automated application-level undo (`Ctrl+Z`) explicitly excludes terminal/shell processes to avoid sending ASCII `0x1A` control characters.
 - **Important**: Denylists and keyword heuristics are best-effort protections. They cannot guarantee that unconventional form fields, custom canvas components, or untagged inputs are fully masked. Users should avoid interacting with sensitive credentials during active recording sessions.

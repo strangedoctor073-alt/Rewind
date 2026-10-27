@@ -191,4 +191,11 @@ describe('TimelineDatabase', () => {
   it('checkpoint runs without error', () => {
     expect(() => db.checkpoint()).not.toThrow()
   })
+
+  it('getWalStatus queries real SQLite WAL pragma', () => {
+    const status = db.getWalStatus()
+    expect(typeof status).toBe('string')
+    // In-memory DB returns 'memory' or 'clean' (or 'disabled' if WAL unsupported)
+    expect(['clean', 'memory', 'busy', 'pending', 'disabled']).toContain(status)
+  })
 })

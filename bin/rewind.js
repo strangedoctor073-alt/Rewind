@@ -346,6 +346,23 @@ async function cmdMacro(args) {
   }
 }
 
+async function promptPassphrase(promptText) {
+  if (!process.stdin.isTTY) {
+    return null
+  }
+  const readline = await import('node:readline')
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+  return new Promise((resolve) => {
+    rl.question(promptText, (answer) => {
+      rl.close()
+      resolve(answer.trim())
+    })
+  })
+}
+
 async function cmdVault(args) {
   const action = args[0]?.toLowerCase()
   if (action !== 'create' && action !== 'restore') {
@@ -363,7 +380,23 @@ async function cmdVault(args) {
 
   const inputPath = inIdx >= 0 ? args[inIdx + 1] : (action === 'create' ? defaultDbPath : defaultVaultPath)
   const outputPath = outIdx >= 0 ? args[outIdx + 1] : (action === 'create' ? defaultVaultPath : defaultDbPath)
-  const passphrase = passIdx >= 0 ? args[passIdx + 1] : (process.env.REWIND_VAULT_PASS || 'rewind-default-vault')
+
+  let passphrase = passIdx >= 0 ? args[passIdx + 1] : (process.env.REWIND_VAULT_PASS || '')
+  if (!passphrase) {
+    if (process.stdin.isTTY) {
+      passphrase = await promptPassphrase(`Enter vault passphrase${action === 'create' ? ' (min 12 characters)' : ''}: `)
+    }
+  }
+
+  if (!passphrase) {
+    console.error(`${RED}✗ Vault operation aborted: Passphrase is required. Provide --pass <passphrase> or set REWIND_VAULT_PASS.${RESET}`)
+    process.exit(1)
+  }
+
+  if (action === 'create' && passphrase.length < 12) {
+    console.error(`${RED}✗ Weak passphrase: Vault creation requires at least 12 characters.${RESET}`)
+    process.exit(1)
+  }
 
   try {
     const compiledVault = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist-daemon', 'daemon', 'vault', 'vaultEngine.js')
