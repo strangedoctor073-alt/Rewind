@@ -6,7 +6,7 @@
 - **Cleaned Dashboard & Component Endpoints**: Replaced legacy `/api/` fetch fallbacks in `ClipboardPanel.tsx` and `StandupModal.tsx` with unified, authenticated JSON-RPC calls over the loopback HTTP bridge.
 - **Updated System Documentation**: Synchronized `README.md` and `CHANGELOG.md` with complete documentation for all v5 features (Resurrection, Playwright/PowerShell Exporters, Focus Engine, AES-256-GCM Vaults, NSIS Packaging, and Clipboard/AI RPCs).
 - **Comprehensive Quality Verification**:
-  - Full Vitest suite passing with 47 test files and 328 unit/integration tests.
+  - Full Vitest suite passing with 47 test files and 331 unit/integration tests.
   - Zero ESLint errors or warnings across entire repo.
   - Zero TypeScript build errors across all composite project boundaries (`npx tsc -b`).
   - Production builds verified for daemon (`dist-daemon`), web dashboard (`dist`), and browser extension (`extension/assets`).
@@ -64,7 +64,7 @@
 - **Playwright Macro Exporter** (`daemon/macros/playwright/playwrightExporter.ts`, RPC `macro.export`, `rewind macro export`): converts a recorded browser session into a runnable Playwright TypeScript test. Navigates, clicks, fills, scrolls; masks secrets as `process.env.*`; optional `expect()` assertions on every interaction. Accepts `--format`, `--output`, `--name` flags.
 - **PowerShell DevOps Macro Exporter** (`daemon/macros/devops/powershellExporter.ts`): emits a `.ps1` script from the same browser recording. Elevation check, idempotent structure, sensitive env vars masked via `Read-Host -AsSecureString`. Select with `--format powershell`.
 - **Focus & Productivity Analytics Engine** (`daemon/analytics/focusEngine.ts`, RPC `analytics.focusReport` / `analytics.telemetryStats`): computes Deep Focus Score (0–100), Context-Switch Velocity (switches/hr), distraction spike detection, per-app heatmap and hourly activity heatmap from the SQLite timeline. `rewind status` now shows Focus % and Context Switches/hr. Dashboard `useDaemonRpc` polls `analytics.telemetryStats` alongside the timeline.
-- **Zero-Knowledge AES-256-GCM Encrypted Vaults** (`daemon/vault/vaultEngine.ts`, `rewind vault create|restore`): offline-only CLI vault for backing up and restoring timeline data. AES-256-GCM + PBKDF2-SHA-256 (100 k iterations, 32-byte salt, 12-byte IV, 16-byte auth tag), gzip compression, atomic write via `.tmp` rename, magic header `REWIND_VAULT_V1\0`. No RPC exposure — vault operations are intentionally air-gapped.
+- **Client-Side AES-256-GCM Encrypted Vaults** (`daemon/vault/vaultEngine.ts`, `rewind vault create|restore`): offline-only CLI vault for backing up and restoring timeline data. AES-256-GCM + PBKDF2-SHA-256 (600 k iterations per OWASP guidance, 32-byte salt, 12-byte IV, 16-byte auth tag), gzip compression, atomic write via `.tmp` rename, magic header `REWIND_VAULT_V1\0`. No RPC exposure.
 
 ### Fixed
 - `extension/__tests__/background.test.ts`: test "closes out a recording when its tab is closed" had a race between `saveRecording()` setting `active: false` and the subsequent `chrome.storage.local.remove(sessionPointerKey)` (fake store has a `setTimeout(0)` per op). Polling loop now waits for both conditions before asserting. Added `20_000 ms` timeout to match the other polling tests.
@@ -91,7 +91,7 @@ From this release onward, increments follow an **even-minor** scheme under the v
 - **Ghost Shield was absent from the daemon capture path.** Password managers / incognito windows are now vetoed before any pixels are read (`daemon/privacy.ts`, parity-tested against `desktop/security.js`).
 - RPC server: `stop()` hung forever while any client was connected (so the database was never closed after `rewind stop`); a port clash crashed the process; handlers' `{code,message}` errors were reported as "Internal error"; a 10 s timer leaked on every error; pipelined requests could be answered out of order; no limit on failed auth attempts or on silent unauthenticated connections.
 - Daemon start: the auth token was overwritten *before* the port was bound, so a second daemon locked clients out of the first; a failed start leaked the DB handle. `daemon.status` reported at most 50 moments; `daemon.pause` accepted NaN/negative minutes and a stale timer could un-pause a later pause early; capture ticks could overlap.
-- `auth.token` is now written with mode 0600.
+- `auth.token` is written with mode 0600 on POSIX, and restricted to current user NTFS ACLs via `icacls` on Windows.
 - Database: moment + FTS insert is one transaction; `limit`/`offset` are clamped.
 - Desktop: after a timed privacy pause expired the **clipboard engine stayed paused forever**; windows merely containing "Rewind" in their title (e.g. an editor on this project) were never recorded; unvalidated renderer input could throw inside the main process (`copy-to-clipboard`, pause minutes, checkpoint label); a second instance could run alongside the first.
 - Extension: events were lost to read-modify-write races, failed saves, and service-worker eviction; recordings could grow past the storage quota; starting twice or closing a tab left recordings "active" forever; `<textarea>` fields were never masked; textarea/select labels leaked their contents; unescaped values in generated selectors; "Extension context invalidated" errors.

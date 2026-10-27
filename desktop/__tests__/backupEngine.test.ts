@@ -105,6 +105,25 @@ describe('desktop 20-second atomic WAL backup engine', () => {
     expect(engine.listCheckpoints().length).toBe(0)
   })
 
+  it('creates and restores AES-256-GCM encrypted checkpoints', () => {
+    const engine = new BackupEngine(tempDir, 1000)
+    const sensitiveSession = {
+      id: 's-encrypted-test',
+      events: [{ id: 'e-priv', title: 'TopSecret Confidential Window' }],
+    }
+
+    const checkpoint = engine.createCheckpoint('Secure Snapshot', sensitiveSession, { encrypt: true })
+    const chkFile = engine.checkpointPath(checkpoint.id)!
+    const rawDisk = fs.readFileSync(chkFile, 'utf-8')
+    expect(rawDisk).not.toContain('TopSecret Confidential Window')
+    expect(rawDisk).toContain('encryptedSession')
+
+    const restored = engine.restoreCheckpoint(checkpoint.id)
+    expect(restored).not.toBeNull()
+    expect(restored?.id).toBe('s-encrypted-test')
+    expect(restored?.events[0].title).toBe('TopSecret Confidential Window')
+  })
+
   it('exports and imports backup bundle archives (.rewind.backup)', () => {
     const engine = new BackupEngine(tempDir, 1000)
     const mockSession = {

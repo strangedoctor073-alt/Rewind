@@ -80,6 +80,36 @@ describe('HttpBridge', () => {
     expect(JSON.parse(res.body).error).toEqual({ code: -32602, message: 'bad params' })
   })
 
+  it('enforces pinned extension IDs when configured', async () => {
+    const pinnedId = 'abcdefghijklmnopabcdefghijklmnop'
+    const foreignId = 'ponmlkjihgfedcbaponmlkjihgfedcba'
+    const p = port++
+    const b = new HttpBridge({
+      port: p,
+      authToken: TOKEN,
+      onMethod: async () => ({ ok: true }),
+      allowedExtensionIds: [pinnedId],
+    })
+    bridges.push(b)
+    await b.start()
+
+    // Pinned origin allowed
+    const pinnedRes = await request(p, {
+      method: 'OPTIONS',
+      path: '/rpc',
+      headers: { origin: `chrome-extension://${pinnedId}` },
+    })
+    expect(pinnedRes.status).toBe(204)
+
+    // Unpinned origin rejected
+    const foreignRes = await request(p, {
+      method: 'OPTIONS',
+      path: '/rpc',
+      headers: { origin: `chrome-extension://${foreignId}` },
+    })
+    expect(foreignRes.status).toBe(403)
+  })
+
   it('stop() completes while a keep-alive connection is open', async () => {
     const p = await boot()
     const agent = new http.Agent({ keepAlive: true })

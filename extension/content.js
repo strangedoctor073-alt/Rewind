@@ -6,25 +6,42 @@
   let startedAt = 0
   let lastScrollAt = 0
 
-  // Applies to <input> AND <textarea>: the old check was input-only, so a
-  // textarea named "password" or "secret" was recorded in clear text.
-  const sensitive = (element) => (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) && (
-    element.type === 'password' || element.autocomplete?.includes('cc-') || element.autocomplete === 'one-time-code' ||
-    /password|passcode|card|credit|cvv|secret|token|otp/i.test(`${element.name} ${element.id} ${element.autocomplete}`)
-  )
+  // Token-aware sensitive field detector: uses word boundaries to prevent false positives
+  // (e.g. "cardinal" or "wildcard") while catching credentials, 2FA codes, payment tokens,
+  // bank numbers, SSNs, and contenteditable fields.
+  const SENSITIVE_TOKEN_REGEX = /\b(password|passcode|pass|card|credit|cvv|cvc|secret|token|otp|2fa|ssn|social-security|tax-id|bank|routing|account|pin)\b/i
+
+  const sensitive = (element) => {
+    if (!element) return false
+    if (element.isContentEditable) {
+      const aria = element.getAttribute('aria-label') || ''
+      const role = element.getAttribute('role') || ''
+      return SENSITIVE_TOKEN_REGEX.test(`${element.id} ${aria} ${role}`)
+    }
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      if (element.type === 'password') return true
+      if (element.autocomplete && (element.autocomplete.includes('cc-') || element.autocomplete === 'one-time-code' || element.autocomplete.includes('password'))) return true
+      const idOrName = `${element.name || ''} ${element.id || ''} ${element.autocomplete || ''} ${element.placeholder || ''}`
+      return SENSITIVE_TOKEN_REGEX.test(idOrName)
+    }
+    return false
+  }
 
   // Escape a value for use inside a double-quoted CSS attribute selector.
   const quoteAttr = (value) => `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 
+  // Dynamic/generated IDs (React :r1:, CSS-in-JS hashes, long hex sequences) change
+  // on every render and should NOT be prioritized over semantic attributes.
+  const isDynamicId = (id) => !id || /^(:r|react-|css-|styled-|ember|\d{4,})/i.test(id) || /[a-f0-9]{8,}/i.test(id)
+
   const selector = (element) => {
-    if (element.id) return `#${CSS.escape(element.id)}`
+    if (element.id && !isDynamicId(element.id)) return `#${CSS.escape(element.id)}`
     if (element.dataset.rewindTarget) return `[data-rewind-target=${quoteAttr(element.dataset.rewindTarget)}]`
+    if (element.dataset.testid) return `[data-testid=${quoteAttr(element.dataset.testid)}]`
+    if (element.dataset.test) return `[data-test=${quoteAttr(element.dataset.test)}]`
     const name = element.getAttribute('name')
     if (name) return `${element.tagName.toLowerCase()}[name=${quoteAttr(name)}]`
-    // No stable attribute to key off — fall back to a short nth-of-type path
-    // instead of a bare tag name, so events stay distinguishable in the
-    // inspector even on markup with no ids/names. Not a replay-grade
-    // selector engine (that's a later phase), just a cheap improvement.
+    // Fall back to a short nth-of-type path with dynamic-id suppression
     const path = []
     let node = element
     for (let depth = 0; node instanceof Element && depth < 4; depth += 1) {
@@ -35,7 +52,7 @@
         if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(node) + 1})`
       }
       path.unshift(part)
-      if (node.id) { path[0] = `#${CSS.escape(node.id)}`; break }
+      if (node.id && !isDynamicId(node.id)) { path[0] = `#${CSS.escape(node.id)}`; break }
       node = parent
     }
     return path.join(' > ')
@@ -107,6 +124,9 @@
     // long as this page hasn't navigated away (which would tear this content
     // script down and make it unreachable — the background script handles
     // that failure case by simply not being able to message it).
-    if (message.type === 'REWIND_SCROLL_TO') { window.scrollTo({ top: message.scrollY || 0, behavior: 'smooth' }); sendResponse({ ok: true }) }
+    if (message.type === 'REWIND_SCROLL_TO') {
+      window.scrollTo({ left: message.scrollX || 0, top: message.scrollY || 0, behavior: 'smooth' })
+      sendResponse({ ok: true })
+    }
   })
 })()

@@ -7,6 +7,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
 
 /** Default token file location: %LOCALAPPDATA%\Rewind\auth.token */
 function defaultTokenPath(): string {
@@ -22,18 +23,34 @@ export function generateAuthToken(): string {
 /**
  * Atomically write the auth token to disk.
  * Follows Trap 6: write to .tmp first, then rename.
+ * On Windows, applies NTFS ACLs via icacls so only the current user has access.
  */
 export function writeAuthToken(token: string, tokenPath?: string): void {
   const filePath = tokenPath || defaultTokenPath()
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
 
-  // 0o600: owner read/write only (POSIX). On Windows the per-user
-  // %LOCALAPPDATA% ACL already applies; the mode is simply ignored there.
-  // Matches desktop/keyStore.js, which also writes secrets with 0o600.
+  // 0o600: owner read/write only (POSIX).
   const tmpPath = filePath + '.tmp'
   fs.writeFileSync(tmpPath, token, { encoding: 'utf-8', mode: 0o600 })
   fs.renameSync(tmpPath, filePath)
+
+  // On Windows, node's mode only controls the read-only flag.
+  // Use icacls to strip inheritance and grant explicit (R,W) only to the current user.
+  if (process.platform === 'win32') {
+    try {
+      const username = process.env.USERNAME
+      if (username) {
+        execFileSync('icacls.exe', [filePath, '/inheritance:r', '/grant:r', `${username}:(R,W)`], {
+          windowsHide: true,
+          stdio: 'ignore',
+          timeout: 2000,
+        })
+      }
+    } catch {
+      // Best-effort: %LOCALAPPDATA% directory default ACL already restricts other non-admin users.
+    }
+  }
 }
 
 /** Read the auth token from disk. Returns null if file does not exist. */

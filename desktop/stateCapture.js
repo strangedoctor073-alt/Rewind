@@ -30,11 +30,9 @@ export const TERMINAL_PROCESSES = new Set([
 export const TERMINAL_DISCLAIMER =
   'Note: Prior terminal output, environment, and command history have been restored. Commands already executed on your machine cannot be rolled back.'
 
-const FALLBACK_KEY_SALT = 'rewind_fallback_key_'
 const DEFAULT_WINDOWS_FALLBACK_CWD = process.env.SystemDrive ? `${process.env.SystemDrive}\\` : 'C:\\'
 
 let keyProvider = null
-let warnedLegacyKey = false
 
 /**
  * Installs the per-install key provider (see keyStore.js).
@@ -45,20 +43,25 @@ export function setStorageKeyProvider(provider) {
 }
 
 /**
- * Returns the AES key. Prefers the OS-protected random key. The fallback is a
- * username-derived key: it is obfuscation only, NOT secret, and is used solely
- * when the OS secure store is unavailable (and in unit tests).
+ * Returns the AES key. Prefers the OS-protected random key.
+ * FAILS CLOSED: If the OS secure store is unavailable, refuses to encrypt
+ * sensitive state with weak fallback obfuscation.
  */
 function getStorageKey() {
   const provided = keyProvider?.()
   if (provided) return provided
 
-  if (keyProvider && !warnedLegacyKey) {
-    warnedLegacyKey = true
-    console.warn('[REWIND] OS secure storage unavailable; state blobs use a weak fallback key.')
+  // In production/desktop app: keyProvider is set. If OS store returns null, fail closed.
+  if (keyProvider) {
+    throw new Error('OS secure storage unavailable: refusing to store sensitive state with weak encryption (fails closed).')
   }
-  const user = process.env.USERNAME || process.env.USER || 'rewind_local_user'
-  return crypto.createHash('sha256').update(`${FALLBACK_KEY_SALT}${user}`).digest()
+
+  // In unit test harness where no key provider is explicitly installed:
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+    return crypto.createHash('sha256').update('rewind_test_suite_key_only').digest()
+  }
+
+  throw new Error('No storage key provider installed: refusing to encrypt sensitive state without OS secure store.')
 }
 
 /**

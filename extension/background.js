@@ -292,13 +292,17 @@ async function reconcileOrphans() {
 }
 chrome.runtime.onStartup?.addListener(() => { void reconcileOrphans() })
 
-// Matches ignoring query string / hash, since those often change from normal
-// interaction (search boxes, client-side routers) without meaning "different page".
-function sameLocation(a, b) {
+// Matches URL locations. By default, performs exact matching (including query string and hash)
+// so distinct SPA routes or search states (?page=2 vs ?page=3) are not conflated.
+// When matchQueryAndHash is false, allows fallback to origin + pathname matching.
+function sameLocation(a, b, { matchQueryAndHash = true } = {}) {
   try {
     const left = new URL(a)
     const right = new URL(b)
-    return left.origin === right.origin && left.pathname === right.pathname
+    const baseMatch = left.origin === right.origin && left.pathname === right.pathname
+    if (!baseMatch) return false
+    if (!matchQueryAndHash) return true
+    return left.search === right.search && left.hash === right.hash
   } catch {
     return a === b
   }
@@ -306,17 +310,18 @@ function sameLocation(a, b) {
 
 async function findOpenTabFor(url) {
   const tabs = await chrome.tabs.query({})
-  return tabs.find((tab) => tab.url && sameLocation(tab.url, url))
+  // 1. Prefer exact match (including query and hash)
+  const exact = tabs.find((tab) => tab.url && sameLocation(tab.url, url, { matchQueryAndHash: true }))
+  if (exact) return exact
+  // 2. Fall back to origin + pathname match
+  return tabs.find((tab) => tab.url && sameLocation(tab.url, url, { matchQueryAndHash: false }))
 }
 
 // Rewind is intentionally scoped to what the extension's current permissions
-// (activeTab + scripting + tabs, no broad host permission) can honestly do:
+// (activeTab + scripting + tabs) can honestly do:
 //   - find or open the tab for the event's page and focus it (always works)
-//   - restore scroll position, but ONLY if that tab still has our content
-//     script resident (i.e. it hasn't navigated/reloaded since). We message
-//     the existing content script rather than injecting a new one, since
-//     injecting into an arbitrary tab we didn't just get activeTab for would
-//     need a broader host permission this project deliberately doesn't request.
+//   - restore horizontal (scrollX) and vertical (scrollY) scroll positions,
+//     provided that tab still has our content script resident.
 async function rewindTo(recordingId, eventId) {
   const recording = await getRecording(recordingId)
   if (!recording) throw new Error('Recording not found.')
@@ -329,10 +334,11 @@ async function rewindTo(recordingId, eventId) {
   if (existing?.id) {
     await chrome.tabs.update(existing.id, { active: true })
     if (existing.windowId !== undefined) await chrome.windows.update(existing.windowId, { focused: true })
+    const scrollX = typeof event.scrollX === 'number' ? event.scrollX : 0
     const scrollY = typeof event.scrollY === 'number' ? event.scrollY : 0
     try {
-      await chrome.tabs.sendMessage(existing.id, { type: 'REWIND_SCROLL_TO', scrollY })
-      return { ok: true, tabId: existing.id, scrolledTo: scrollY }
+      await chrome.tabs.sendMessage(existing.id, { type: 'REWIND_SCROLL_TO', scrollX, scrollY })
+      return { ok: true, tabId: existing.id, scrolledTo: scrollY, scrolledLeft: scrollX }
     } catch {
       return { ok: true, tabId: existing.id, scrolledTo: null, note: `Opened ${safeHost(targetUrl)} — it reloaded since recording, so REWIND couldn't restore the scroll position.` }
     }

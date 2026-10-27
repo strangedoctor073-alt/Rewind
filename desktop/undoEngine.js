@@ -45,6 +45,15 @@ export class UndoEngine {
     const active = getActiveWindow()
     const hwnd = targetHwnd || active?.hwnd
     if (!hwnd) return false
+
+    // Safety: Exclude terminals to prevent sending Ctrl+Z (SIGTSTP or EOF interruption)
+    const proc = (active?.processName || '').toLowerCase()
+    const terminalProcs = ['cmd.exe', 'powershell.exe', 'pwsh.exe', 'windowsterminal.exe', 'wt.exe', 'bash.exe', 'wsl.exe']
+    if (terminalProcs.includes(proc)) {
+      console.warn(`[REWIND Undo] Suppressed synthetic Ctrl+Z on terminal process: ${active?.processName}`)
+      return false
+    }
+
     return await sendCtrlZ(hwnd, timeoutMs)
   }
 

@@ -67,7 +67,25 @@ describe('per-install encryption key store', () => {
     })
     expect(StateCaptureEngine.decodeState(captured.encryptedBlob).cwd).toBe('C:\\Users\\demo')
 
-    setStorageKeyProvider(null) // fallback (username-derived) key must NOT decrypt it
+    setStorageKeyProvider(null) // without provider, fails closed / cannot decrypt
     expect(() => StateCaptureEngine.decodeState(captured.encryptedBlob)).toThrow()
+  })
+
+  it('fails closed when OS secure storage is unavailable, refusing to write sensitive state with weak encryption', () => {
+    const unavailProvider = createKeyProvider({
+      safeStorage: { ...fakeSafeStorage, isEncryptionAvailable: () => false },
+      dir,
+    })
+    setStorageKeyProvider(unavailProvider)
+    expect(() => {
+      StateCaptureEngine.captureState({
+        processName: 'cmd.exe',
+        exePath: 'C:\\Windows\\System32\\cmd.exe',
+        title: 'cmd',
+        cwd: 'C:\\Users\\demo',
+        buffer: 'hello',
+        history: ['dir'],
+      })
+    }).toThrow(/OS secure storage unavailable: refusing to store sensitive state/i)
   })
 })

@@ -13,7 +13,7 @@
   <a href="https://github.com/strangedoctor073-alt/Rewind/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/strangedoctor073-alt/Rewind/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status" /></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Chrome%20MV3-blue?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/badge/Desktop-Electron%20(Windows)-61dafb?style=flat-square" alt="Desktop: Electron on Windows" />
-  <img src="https://img.shields.io/badge/Privacy-Zero%20Keylogging-d9ff58?style=flat-square&color=black" alt="Zero Keylogging" />
+  <img src="https://img.shields.io/badge/Storage-Local--First%20SQLite-blue?style=flat-square" alt="Local-First SQLite" />
   <img src="https://img.shields.io/badge/Backups-20s%20auto--save-success?style=flat-square" alt="20s Atomic WAL" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT" /></a>
 </p>
@@ -28,7 +28,7 @@
   - `rewind macro export --format powershell --output script.ps1`: Generate idempotent PowerShell automation with elevation checks and secure string masking.
 - **Cognitive Standup & AI Synthesizer**: Generate daily standup summaries, timesheet activity logs, and commit drafts powered by Ollama (`ai.standup` RPC with heuristic offline fallback).
 - **Focus & Productivity Intelligence**: Deep Focus score (0–100), context-switch velocity, distraction spike detection, and 24h interactive activity heatmaps via `FocusTelemetryWidget.tsx` and `rewind status`.
-- **Zero-Knowledge Air-Gapped Vaults**: `rewind vault create <file.vault>` / `rewind vault restore <file.vault>` — AES-256-GCM + PBKDF2 (100k rounds) encrypted timeline backups with gzip compression.
+- **Client-Side Encrypted Timeline Vaults**: `rewind vault create <file.vault>` / `rewind vault restore <file.vault>` — AES-256-GCM + PBKDF2 (600k rounds per OWASP guidelines) encrypted timeline backups with gzip compression.
 - **Unified Multi-Format Clipboard History**: FTS full-text search across clipboard text, HTML, and rich format entries with real-time Ghost Shield entropy redaction (`clipboard.history` and `clipboard.search` RPCs).
 - **Windows Packaging & Distribution**: Standard NSIS installer (`.exe`) with dual-mode per-user/per-machine installation and standalone portable executables via `npm run dist`.
 - Full detailed evolution and fixes: [CHANGELOG.md](CHANGELOG.md).
@@ -67,7 +67,7 @@
 **2. Desktop Time Machine (`desktop/`)**
 - Floating HUD pill expandable to a full Time Machine dashboard via global `Ctrl+Alt+Z`.
 - Relaunch closed applications with preserved positions; resurrect terminal sessions.
-- Universal Undo (`Ctrl+Z`) verified with a 500ms foreground switch handshake.
+- Universal Undo (`Ctrl+Z`) verified with a 500ms foreground switch handshake (terminal processes excluded to prevent suspension).
 - 20-second atomic WAL auto-backup and encrypted snapshot export.
 
 **3. In-Browser Interaction Recording (`extension/`)**
@@ -144,19 +144,23 @@ Open `http://localhost:5173/` to try timeline scrubbing, undo/redo (`Ctrl/Cmd+Z`
 
 ## Privacy & security model
 
-- No network calls, no telemetry, no accounts. The overlay's Content-Security-Policy blocks all network access.
-- No keylogging: the app never installs keyboard hooks. The only keystroke it sends is a synthetic `Ctrl+Z` for Undo.
-- The overlay window is sandboxed (context isolation on, Node integration off) and can only talk to the main process through an allow-listed bridge. The main process resolves restore requests from its own timeline instead of trusting the renderer.
-- See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
+- **Zero External Network Calls**: No telemetry, no cloud servers, no user accounts. Internal communication is strictly restricted to local loopback interfaces (`127.0.0.1:48291` JSON-RPC and `127.0.0.1:48292` HTTP bridge, plus optional local Ollama on `127.0.0.1:11434`). The overlay's Content-Security-Policy blocks all network access (`connect-src 'none'`).
+- **No Global Keylogging**: The desktop application never installs global OS keyboard hooks (`WH_KEYBOARD_LL`). The only synthetic keystroke REWIND dispatches is `Ctrl+Z` to trigger application-level Undo after focus verification (terminals and shells are excluded).
+- **Extension Input Recording & Masking**: The browser extension records user interactions in active tabs into `chrome.storage.local`. Sensitive form inputs (passwords, credit card numbers, CVVs, SSNs, 2FA/OTP tokens) are masked (`[masked]`) via best-effort heuristic denylists. Plaintext credentials should never be typed into custom unmasked fields during recorded sessions.
+- **Local Framebuffers & OCR**: Window framebuffer previews captured via Win32 `PrintWindow` for perceptual hashing (dHash) and OCR tokens remain entirely local on disk and are never uploaded.
+- **Fail-Closed State Encryption**: Saved state blobs are encrypted with AES-256-GCM using keys protected by the OS secure store (Electron `safeStorage` / DPAPI on Windows). If the secure store is unavailable, REWIND fails closed rather than degrading to weak fallback obfuscation.
+- **Sandboxed Overlay**: The overlay renderer is sandboxed (`contextIsolation: true`, `nodeIntegration: false`) and communicates only through an allow-listed IPC bridge. The main process resolves restore requests from its own internal timeline.
+- See [SECURITY.md](SECURITY.md) for vulnerability reporting and detailed security architecture.
 
 ---
 
 ## Development & Testing
 
 ```bash
-npm test          # 70 tests across 15 suites (Vitest)
-npm run lint      # ESLint
+npm test          # 331 tests across 47 suites (Vitest)
+npm run lint      # ESLint (0 errors, 0 warnings)
 npm run build     # typecheck + web build
+npm run build:daemon
 npm run build:extension
 ```
 

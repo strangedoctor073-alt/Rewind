@@ -10,6 +10,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { encryptPayload, decryptPayload } from './stateCapture.js'
 
 const CHECKPOINT_ID_PATTERN = /^chk-\d{1,16}$/
 
@@ -118,7 +119,7 @@ export class BackupEngine {
    * @param {object} [sessionOverride=null]
    * @returns {{ id: string, label: string, timestamp: number, eventCount: number }}
    */
-  createCheckpoint(label = 'Manual Checkpoint', sessionOverride = null) {
+  createCheckpoint(label = 'Manual Checkpoint', sessionOverride = null, { encrypt = false } = {}) {
     const session = sessionOverride || this.currentSession
     if (!session) throw new Error('No active session available to checkpoint')
 
@@ -126,12 +127,24 @@ export class BackupEngine {
     const timestamp = Date.now()
     const eventCount = Array.isArray(session.events) ? session.events.length : 0
 
-    const record = {
-      id,
-      label,
-      timestamp,
-      eventCount,
-      session,
+    let record
+    if (encrypt) {
+      const encryptedSession = encryptPayload(Buffer.from(JSON.stringify(session), 'utf-8')).toString('base64')
+      record = {
+        id,
+        label,
+        timestamp,
+        eventCount,
+        encryptedSession,
+      }
+    } else {
+      record = {
+        id,
+        label,
+        timestamp,
+        eventCount,
+        session,
+      }
     }
 
     const checkpointFile = path.join(this.checkpointsDir, `${id}.json`)
@@ -204,6 +217,10 @@ export class BackupEngine {
 
     try {
       const content = JSON.parse(fs.readFileSync(checkpointFile, 'utf-8'))
+      if (content.encryptedSession) {
+        const decrypted = decryptPayload(Buffer.from(content.encryptedSession, 'base64'))
+        return JSON.parse(decrypted.toString('utf-8'))
+      }
       return content.session || null
     } catch (err) {
       console.error('[REWIND Backup] Failed to restore checkpoint:', err)

@@ -372,7 +372,7 @@ async function cmdVault(args) {
     const { VaultEngine } = await import(pathToFileURL(vaultPath).href)
 
     if (action === 'create') {
-      console.log(`${CYAN}🔒 Creating encrypted air-gapped vault...${RESET}`)
+      console.log(`${CYAN}🔒 Creating encrypted timeline vault (PBKDF2 600k rounds)...${RESET}`)
       VaultEngine.createVaultFile(inputPath, outputPath, passphrase, {
         description: `Exported from REWIND on ${new Date().toLocaleDateString()}`,
       })
@@ -474,7 +474,7 @@ ${CYAN}COMMANDS${RESET}
   ${GREEN}autostart${RESET} <enable|disable|status> Manage Windows startup registration
   ${GREEN}export${RESET} [--branch <name>] Export provenance bundle for AI PR review
   ${GREEN}macro${RESET} export [options]        Export browser interactions as Playwright test script
-  ${GREEN}vault${RESET} <create|restore>        Air-gapped zero-knowledge AES-256 encrypted backups
+  ${GREEN}vault${RESET} <create|restore>        Client-side AES-256-GCM encrypted timeline backups (PBKDF2 600k)
   ${GREEN}help${RESET}                     Show this help message
 
 ${CYAN}EXAMPLES${RESET}

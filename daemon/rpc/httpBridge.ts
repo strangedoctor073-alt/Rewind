@@ -39,6 +39,7 @@ export interface HttpBridgeConfig {
   authToken: string
   onMethod: MethodHandler
   allowedOrigins?: string[]
+  allowedExtensionIds?: string[]
 }
 
 export const DEFAULT_ALLOWED_ORIGINS = [
@@ -54,12 +55,18 @@ export class HttpBridge {
   private readonly authToken: string
   private readonly onMethod: MethodHandler
   private readonly allowedOrigins: Set<string>
+  private readonly allowedExtensionIds: Set<string> | null
 
   constructor(config: HttpBridgeConfig) {
     this.port = config.port ?? DEFAULT_HTTP_PORT
     this.authToken = config.authToken
     this.onMethod = config.onMethod
     this.allowedOrigins = new Set(config.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS)
+    const envPinned = process.env.REWIND_ALLOWED_EXTENSION_ID
+      ? process.env.REWIND_ALLOWED_EXTENSION_ID.split(',').map((s) => s.trim())
+      : null
+    const pinned = config.allowedExtensionIds ?? envPinned
+    this.allowedExtensionIds = pinned ? new Set(pinned) : null
   }
 
   start(): Promise<void> {
@@ -110,10 +117,17 @@ export class HttpBridge {
     if (!this.hostAllowed(req.headers.host)) return this.json(res, 403, { error: 'Forbidden host' })
 
     const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined
-    const isAllowedOrigin = origin !== undefined && (
-      this.allowedOrigins.has(origin) ||
-      /^chrome-extension:\/\/[a-p]{32}$/.test(origin)
-    )
+    let isAllowedOrigin = false
+    if (origin !== undefined) {
+      if (this.allowedOrigins.has(origin)) {
+        isAllowedOrigin = true
+      } else {
+        const extMatch = /^chrome-extension:\/\/([a-p]{32})$/.exec(origin)
+        if (extMatch) {
+          isAllowedOrigin = this.allowedExtensionIds ? this.allowedExtensionIds.has(extMatch[1]) : true
+        }
+      }
+    }
     if (origin !== undefined && !isAllowedOrigin) return this.json(res, 403, { error: 'Forbidden origin' })
 
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${this.port}`)

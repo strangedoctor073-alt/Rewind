@@ -337,6 +337,29 @@ export class RewindDaemon {
         }
         const undoTarget = rowToDbMoment(undoRow)
 
+        // Safety: Terminal and shell processes are strictly excluded from synthetic Ctrl+Z
+        // to prevent process suspension (SIGTSTP in bash/wsl) or EOF/break signals.
+        const TERMINAL_PROCESS_NAMES = new Set([
+          'cmd.exe',
+          'powershell.exe',
+          'pwsh.exe',
+          'windowsterminal.exe',
+          'wt.exe',
+          'bash.exe',
+          'wsl.exe',
+          'git-bash.exe',
+          'mintty.exe',
+        ])
+        const targetAppLower = (undoTarget.appName || '').toLowerCase()
+        if (TERMINAL_PROCESS_NAMES.has(targetAppLower)) {
+          return {
+            undone: false,
+            reason: `Target app "${undoTarget.appName}" is a terminal/shell process. Synthetic Ctrl+Z is excluded to prevent process suspension (SIGTSTP) or EOF interruption.`,
+            momentId: undoMomentId,
+            targetApp: undoTarget.appName,
+          }
+        }
+
         // Synthetic Ctrl+Z via WScript.Shell — Windows only, no global keyboard hook installed.
         // AppActivate focuses the window by title; SendKeys('^z') dispatches the keystroke.
         if (process.platform !== 'win32') {
