@@ -49,3 +49,14 @@
 .product-details h3:first-child { margin-top: 0; }
 .product-details p { margin: 0; color: #65645f; font-size: 11px; line-height: 1.5; }
 @media (max-width: 760px) { .title-input { font-size: 25px; }.header-controls button { padding: 10px; }.demo-product { grid-template-columns: 1fr; }.product-photo { min-height: 150px; }.product-info { padding-top: 0; }.shortcuts-panel { right: 12px; left: 12px; width: auto; } }
+
+
+/* Shared REWIND accent and semantic controls for the development fixture. */
+:root { --fixture-accent: #69d5a5; }
+.recording-row-active span { color: var(--fixture-accent); }
+.recording-row-wrap { position: relative; }
+.recording-row-wrap .recording-row { padding-right: 30px; }
+.recording-delete { position: absolute; top: 6px; right: 4px; display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #a5aab0; opacity: 0; cursor: pointer; }
+.recording-row-wrap:hover .recording-delete, .recording-row-wrap:focus-within .recording-delete { opacity: 1; }
+.recording-delete:hover { background: #2a302f; color: #69d5a5; }
+.timeline input:focus-visible, .timeline button:focus-visible, .recording-row-wrap button:focus-visible { outline: 2px solid var(--fixture-accent); outline-offset: 2px; }

@@ -27,15 +27,17 @@ import { AboutDeveloperModal } from './components/AboutDeveloperModal'
 import { RetentionSettingsModal } from './components/RetentionSettingsModal'
 import { StandupModal } from './standup/StandupModal'
 import { audioEngine } from '../audio/synth'
-import type { DashboardMoment, DashboardViewMode, TelemetryStats } from './types'
+import type { DashboardMoment, DashboardViewMode } from './types'
 import { useDaemonRpc } from './hooks/useDaemonRpc'
-import { resurrectWorkspace } from './hooks/daemonClient'
+import { resurrectWorkspace, undoInApp } from './hooks/daemonClient'
 import { fallbackMoments } from './fixtures/fallbackMoments'
+import { TimelineView } from './timeline/TimelineView'
 
 interface RewindStudioApi {
   onShowCloseDialog?: (cb: () => void) => () => void
   onPrunedNotification?: (cb: (count: number) => void) => () => void
   sendCloseChoice?: (choice: { action: 'minimize' | 'exit'; remember: boolean }) => void
+  toggleHud?: () => void
 }
 
 function getRewindStudio(): RewindStudioApi | undefined {
@@ -43,8 +45,8 @@ function getRewindStudio(): RewindStudioApi | undefined {
 }
 
 export const GrandDashboard: React.FC = () => {
-  const [viewMode, setViewMode] = useState<DashboardViewMode>('flow')
-  const { isConnected, isLive, needsToken, moments, stats: liveStats, focusReport, pair } = useDaemonRpc(fallbackMoments)
+  const [viewMode, setViewMode] = useState<DashboardViewMode>('timeline')
+  const { isConnected, isLive, needsToken, dataStatus, moments, stats, focusReport, error, pair } = useDaemonRpc(fallbackMoments)
   const [selectedMomentId, setSelectedMomentId] = useState<string>('m3')
   const [isOmniboxOpen, setIsOmniboxOpen] = useState(false)
   const [isSoundMuted, setIsSoundMuted] = useState(audioEngine.isMuted())
@@ -62,22 +64,14 @@ export const GrandDashboard: React.FC = () => {
   )
 
   const previousMoment = useMemo(() => {
-    const idx = moments.findIndex((m) => m.id === selectedMomentId)
-    if (idx > 0) return moments[idx - 1]
-    return moments[0] || null
-  }, [moments, selectedMomentId])
+    if (!selectedMoment) return null
+    const idx = moments.findIndex((m) => m.id === selectedMoment.id)
+    return idx > 0 ? moments[idx - 1] : null
+  }, [moments, selectedMoment])
 
-  const stats: TelemetryStats = useMemo(
-    () =>
-      liveStats || {
-        focusScore: 94,
-        contextSwitchesPerHour: 12,
-        activeSessionDurationMinutes: 38,
-        walStatus: 'clean',
-        momentsRecorded: moments.length,
-      },
-    [liveStats, moments]
-  )
+  const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const [undoBusy, setUndoBusy] = useState(false)
+  const [undoFeedback, setUndoFeedback] = useState<{ momentId: string; message: string } | null>(null)
 
   const nodeTypes = useMemo(
     () => ({
@@ -186,8 +180,8 @@ export const GrandDashboard: React.FC = () => {
             id: `e-${lastMomentId}-${sepNodeId}`,
             source: lastMomentId,
             target: sepNodeId,
-            animated: true,
-            style: { stroke: '#00f0ff', strokeWidth: 1.5, strokeDasharray: '4 4' },
+            animated: false,
+            style: { stroke: 'rgba(105, 213, 165, 0.55)', strokeWidth: 1.5, strokeDasharray: '4 4' },
           })
         }
         lastMomentId = sepNodeId
@@ -205,14 +199,9 @@ export const GrandDashboard: React.FC = () => {
           position: { x: currentX, y: 120 + (mIdx % 2) * 80 },
           data: {
             moment,
-            isSelected: moment.id === selectedMomentId,
+            isSelected: moment.id === selectedMoment?.id,
             onSelect: (m: DashboardMoment) => {
               setSelectedMomentId(m.id)
-              audioEngine.playTick(1.1)
-            },
-            onJump: (m: DashboardMoment) => {
-              setSelectedMomentId(m.id)
-              audioEngine.playWhoosh()
             },
           },
         })
@@ -222,8 +211,8 @@ export const GrandDashboard: React.FC = () => {
             id: `e-${lastMomentId}-${moment.id}`,
             source: lastMomentId,
             target: moment.id,
-            animated: true,
-            style: { stroke: '#00f0ff', strokeWidth: 2 },
+            animated: false,
+            style: { stroke: 'rgba(105, 213, 165, 0.55)', strokeWidth: 1.5 },
           })
         }
         lastMomentId = moment.id
@@ -232,7 +221,7 @@ export const GrandDashboard: React.FC = () => {
     })
 
     return { initialNodes: nodesList, initialEdges: edgesList }
-  }, [moments, selectedMomentId, collapsedSessions, toggleSessionCollapse])
+  }, [moments, selectedMoment?.id, collapsedSessions, toggleSessionCollapse])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
@@ -242,19 +231,6 @@ export const GrandDashboard: React.FC = () => {
     setNodes(initialNodes)
     setEdges(initialEdges)
   }, [initialNodes, initialEdges, setNodes, setEdges])
-
-  // Synchronize selection state across nodes
-  useEffect(() => {
-    setNodes((prevNodes) =>
-      prevNodes.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          isSelected: node.id === selectedMomentId,
-        },
-      }))
-    )
-  }, [selectedMomentId, setNodes])
 
   // Listen for global Ctrl+K shortcut
   useEffect(() => {
@@ -278,165 +254,91 @@ export const GrandDashboard: React.FC = () => {
     setSelectedMomentId(moment.id)
   }, [])
 
-  const handleJumpMoment = useCallback((moment: DashboardMoment) => {
+  const handleShowInGraph = useCallback((moment: DashboardMoment) => {
     setSelectedMomentId(moment.id)
-    audioEngine.playWhoosh()
+    setViewMode('flow')
   }, [])
+
+  const handleUndoInApp = useCallback(async (moment: DashboardMoment) => {
+    if (!isLive) return
+    setUndoBusy(true)
+    setUndoFeedback(null)
+    try {
+      const result = await undoInApp(moment.id)
+      setUndoFeedback({
+        momentId: moment.id,
+        message: result.undone
+          ? `Ctrl+Z sent to ${result.targetApp || moment.appName}. The app determines whether it can undo this action.`
+          : result.reason || 'No Undo shortcut was sent.',
+      })
+    } catch (err) {
+      setUndoFeedback({ momentId: moment.id, message: err instanceof Error ? err.message : 'Undo request failed; no result was confirmed.' })
+    } finally {
+      setUndoBusy(false)
+    }
+  }, [isLive])
 
   return (
     <div className="grand-dashboard">
       {/* Top Header Bar */}
       <header className="gd-header">
-        <div className="gd-brand">
-          <div className="gd-logo-mark">R</div>
-          <div className="gd-title-group">
-            <span className="gd-title">REWIND STUDIO</span>
-            <span className="gd-subtitle">Time Machine & Activity Intelligence</span>
-          </div>
-          <span
-            style={{
-              marginLeft: '12px',
-              fontSize: '11px',
-              fontWeight: 600,
-              padding: '3px 8px',
-              borderRadius: '999px',
-              border: `1px solid ${isConnected ? 'rgba(0, 240, 255, 0.4)' : 'rgba(255, 255, 255, 0.15)'}`,
-              background: isConnected ? 'rgba(0, 240, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-              color: isConnected ? '#00f0ff' : '#8899aa',
-            }}
-          >
-            {isConnected ? '● LIVE DAEMON' : '○ DEMO MODE'}
-          </span>
-          {isConnected && needsToken && (
-            <button
-              className="gd-nav-btn"
-              style={{ marginLeft: 8 }}
-              title="Run `rewind token` in a terminal and paste the result"
-              onClick={() => {
+        <div className="gd-header-main">
+          <div className="gd-brand">
+            <div className="gd-logo-mark">R</div>
+            <div className="gd-title-group">
+              <span className="gd-title">REWIND</span>
+              <span className="gd-subtitle">Private activity timeline</span>
+            </div>
+            <span className={`gd-connection-status status-${dataStatus}`} aria-live="polite" title={error || undefined}>
+              <span aria-hidden="true" />
+              {dataStatus === 'live' ? 'LIVE' : dataStatus === 'stale' ? 'OFFLINE · CACHED' : dataStatus === 'loading' ? 'CONNECTING' : dataStatus === 'empty' ? 'NO ACTIVITY' : 'SAMPLE DATA'}
+            </span>
+            {isConnected && needsToken && (
+              <button className="gd-pair-btn" title="Run rewind token in a terminal and paste the result" onClick={() => {
                 const token = window.prompt('Paste the daemon token (run: rewind token)')
                 if (token && token.trim()) pair(token)
-              }}
-            >
-              🔑 Pair with daemon
+              }}>Connect daemon</button>
+            )}
+          </div>
+          <div className="gd-header-actions">
+            <button className="gd-search-trigger" onClick={() => setIsOmniboxOpen(true)} aria-label="Search activity" title="Search moments (Ctrl+K)">
+              <span aria-hidden="true">⌕</span><span>Search activity</span><kbd>Ctrl K</kbd>
             </button>
-          )}
+            <details className="gd-more-menu" open={isMoreOpen} onToggle={(event) => setIsMoreOpen((event.currentTarget as HTMLDetailsElement).open)}>
+              <summary aria-label="More actions">More</summary>
+              <div className="gd-more-popover">
+                <button onClick={() => { setIsChromeModalOpen(true); setIsMoreOpen(false) }}>Connect browser recorder</button>
+                {getRewindStudio()?.toggleHud && <button onClick={() => { getRewindStudio()?.toggleHud?.(); setIsMoreOpen(false) }}>Toggle desktop HUD</button>}
+                <button onClick={() => { setIsRetentionModalOpen(true); setIsMoreOpen(false) }}>Retention settings</button>
+                <button onClick={() => { setIsStandupModalOpen(true); setIsMoreOpen(false) }}>Local AI insights</button>
+                <button onClick={() => { setIsAboutModalOpen(true); setIsMoreOpen(false) }}>About REWIND</button>
+                <button onClick={handleToggleSound}>{isSoundMuted ? 'Enable interface sounds' : 'Mute interface sounds'}</button>
+              </div>
+            </details>
+          </div>
         </div>
-
-        {/* View Switcher Pills */}
-        <div className="gd-nav-pills">
-          <button
-            className={`gd-nav-btn ${viewMode === 'flow' ? 'active' : ''}`}
-            onClick={() => {
-              setViewMode('flow')
-              audioEngine.playTick()
-            }}
-          >
-            <span>☍</span> Node Graph
-          </button>
-          <button
-            className={`gd-nav-btn ${viewMode === 'filmstrip' ? 'active' : ''}`}
-            onClick={() => {
-              setViewMode('filmstrip')
-              audioEngine.playTick()
-            }}
-          >
-            <span>▤</span> Filmstrip
-          </button>
-          <button
-            className={`gd-nav-btn ${viewMode === 'diff' ? 'active' : ''}`}
-            onClick={() => {
-              setViewMode('diff')
-              audioEngine.playTick()
-            }}
-          >
-            <span>⮂</span> Curtain Diff
-          </button>
-          <button
-            className={`gd-nav-btn ${viewMode === 'telemetry' ? 'active' : ''}`}
-            onClick={() => {
-              setViewMode('telemetry')
-              audioEngine.playTick()
-            }}
-          >
-            <span>📊</span> Analytics
-          </button>
-        </div>
-
-        {/* Header Quick Controls */}
-        <div className="gd-actions">
-          <button
-            className="rewind-btn"
-            onClick={() => setIsChromeModalOpen(true)}
-            title="Connect Chrome Extension for browser interaction recording"
-          >
-            🌐 Connect Chrome
-          </button>
-
-          <button
-            className="rewind-btn"
-            onClick={() => {
-              const studio = (window as unknown as { rewindStudio?: { toggleHud?: () => void } }).rewindStudio
-              if (studio?.toggleHud) studio.toggleHud()
-            }}
-            title="Toggle Floating HUD Pill (Ctrl+Alt+Z)"
-          >
-            ⚡ HUD
-          </button>
-
-          <button
-            className="rewind-btn"
-            onClick={() => setIsRetentionModalOpen(true)}
-            title="Configure Timeline Retention & Sweep Storage"
-          >
-            🧹 Retention
-          </button>
-
-          <button
-            className="rewind-btn"
-            onClick={() => setIsStandupModalOpen(true)}
-            title="Local AI Connection (Ollama & Cognitive Recall)"
-            style={{
-              borderColor: 'rgba(168, 85, 247, 0.45)',
-              color: '#d8b4fe',
-            }}
-          >
-            🧠 Local AI
-          </button>
-
-          <button
-            className="rewind-btn"
-            onClick={() => {
-              setIsOmniboxOpen(true)
-              audioEngine.playTick(1.2)
-            }}
-            title="Search moments or run actions (Ctrl+K)"
-          >
-            🔍 Search <kbd style={{ fontSize: '0.7rem', opacity: 0.7 }}>Ctrl+K</kbd>
-          </button>
-
-          <button
-            className="rewind-btn"
-            onClick={handleToggleSound}
-            title={isSoundMuted ? 'Unmute procedural sound synth' : 'Mute procedural sound synth'}
-          >
-            {isSoundMuted ? '🔇' : '🔊'}
-          </button>
-
-          <button
-            className="rewind-btn rewind-btn-primary"
-            onClick={() => {
-              audioEngine.playWhoosh()
-              if (selectedMoment) handleJumpMoment(selectedMoment)
-            }}
-          >
-            ↶ Universal Undo
-          </button>
-        </div>
+        <nav className="gd-nav-pills" aria-label="Activity views">
+          <button className={`gd-nav-btn ${viewMode === 'timeline' ? 'active' : ''}`} aria-pressed={viewMode === 'timeline'} onClick={() => setViewMode('timeline')}>Timeline</button>
+          <button className={`gd-nav-btn ${viewMode === 'flow' ? 'active' : ''}`} aria-pressed={viewMode === 'flow'} onClick={() => setViewMode('flow')}>Graph</button>
+          <button className={`gd-nav-btn ${viewMode === 'filmstrip' ? 'active' : ''}`} aria-pressed={viewMode === 'filmstrip'} onClick={() => setViewMode('filmstrip')}>Filmstrip</button>
+          <button className={`gd-nav-btn ${viewMode === 'diff' ? 'active' : ''}`} aria-pressed={viewMode === 'diff'} onClick={() => setViewMode('diff')}>Compare</button>
+          <button className={`gd-nav-btn ${viewMode === 'telemetry' ? 'active' : ''}`} aria-pressed={viewMode === 'telemetry'} onClick={() => setViewMode('telemetry')}>Insights</button>
+        </nav>
       </header>
 
       {/* Main Workspace */}
       <div className="gd-workspace">
         <div className="gd-canvas-container">
+          {viewMode === 'timeline' && (
+            <TimelineView
+              moments={moments}
+              selectedMomentId={selectedMoment?.id ?? null}
+              dataStatus={dataStatus}
+              connectionError={error}
+              onSelectMoment={handleSelectMoment}
+            />
+          )}
+
           {viewMode === 'flow' && (
             <ReactFlow
               nodes={nodes}
@@ -447,11 +349,11 @@ export const GrandDashboard: React.FC = () => {
               onlyRenderVisibleElements={true}
               fitView
             >
-              <Background color="#00f0ff" gap={24} size={1} />
-              <Controls style={{ background: 'rgba(15,21,34,0.9)', borderColor: 'rgba(255,255,255,0.1)' }} />
+              <Background color="#34443d" gap={28} size={1} />
+              <Controls style={{ background: '#171d23', borderColor: '#2b343e' }} />
               <MiniMap
-                nodeColor="#00f0ff"
-                style={{ background: 'rgba(10,14,23,0.9)', border: '1px solid rgba(255,255,255,0.1)' }}
+                nodeColor="#69d5a5"
+                style={{ background: '#14191f', border: '1px solid #2b343e' }}
               />
             </ReactFlow>
           )}
@@ -461,13 +363,13 @@ export const GrandDashboard: React.FC = () => {
               moments={moments}
               selectedMomentId={selectedMomentId}
               onSelectMoment={handleSelectMoment}
-              onJumpMoment={handleJumpMoment}
+              onShowInGraph={handleShowInGraph}
             />
           )}
 
-          {viewMode === 'diff' && previousMoment && selectedMoment && (
-            <CurtainDiff momentBefore={previousMoment} momentAfter={selectedMoment} />
-          )}
+          {viewMode === 'diff' && (previousMoment && selectedMoment
+            ? <CurtainDiff momentBefore={previousMoment} momentAfter={selectedMoment} />
+            : <section className="compare-empty"><p className="timeline-eyebrow">COMPARE</p><h1>Select a later moment to compare</h1><p>Compare needs two distinct, recorded moments. It won’t create a synthetic before-and-after view.</p></section>)}
 
           {viewMode === 'telemetry' && (
             <FocusTelemetryWidget report={focusReport} />
@@ -477,41 +379,16 @@ export const GrandDashboard: React.FC = () => {
         {/* Deep Moment Inspector Drawer */}
         <InspectorDrawer
           moment={selectedMoment}
-          onJump={handleJumpMoment}
+          onShowInGraph={handleShowInGraph}
           onResurrect={isLive ? (m, dryRun) => resurrectWorkspace(m.id, dryRun) : undefined}
+          onUndo={isLive ? handleUndoInApp : undefined}
+          undoBusy={undoBusy}
+          undoFeedback={undoFeedback?.momentId === selectedMoment?.id ? undoFeedback.message : null}
         />
       </div>
 
       {/* Bottom Telemetry Bar */}
-      <TelemetryBar stats={stats} />
-
-      {/* Floating Developer Badge (Opens About Rohan Gupta modal) */}
-      <button
-        onClick={() => setIsAboutModalOpen(true)}
-        className="rewind-btn"
-        style={{
-          position: 'fixed',
-          bottom: 12,
-          right: 14,
-          zIndex: 100,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '4px 10px',
-          background: 'rgba(15, 23, 42, 0.92)',
-          border: '1px solid rgba(163, 230, 53, 0.4)',
-          borderRadius: '999px',
-          color: '#a3e635',
-          fontSize: '11px',
-          fontWeight: 700,
-          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5), 0 0 10px rgba(163, 230, 53, 0.2)',
-          cursor: 'pointer',
-        }}
-        title="About Developer: Rohan Gupta (Click for Bio & Links)"
-      >
-        <span>👤</span>
-        <span>About · Rohan Gupta</span>
-      </button>
+      <TelemetryBar stats={stats} dataStatus={dataStatus} />
 
       {/* Retention Sweeper Toast Notification */}
       {prunedToast && (
@@ -533,8 +410,7 @@ export const GrandDashboard: React.FC = () => {
             gap: 10,
           }}
         >
-          <span>🧹</span>
-          <span>{prunedToast}</span>
+            <span>{prunedToast}</span>
         </div>
       )}
 

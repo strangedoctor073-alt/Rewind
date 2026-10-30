@@ -1428,3 +1428,32 @@ html, body {
     min-width: 110px;
   }
 }
+
+
+/* Shared REWIND product tokens: compact HUD keeps its purpose, not a separate accent identity. */
+:root {
+  --bg-pill: rgba(20, 25, 31, 0.97);
+  --bg-modal: rgba(17, 21, 26, 0.98);
+  --bg-card: #171d23;
+  --bg-card-hover: #1d252d;
+  --border: #2b343e;
+  --border-focus: rgba(105, 213, 165, 0.6);
+  --accent: #69d5a5;
+  --accent-glow: rgba(105, 213, 165, 0.15);
+  --accent-indigo: #69d5a5;
+  --success: #69d5a5;
+  --text: #eef2f6;
+  --text-muted: #a0aab5;
+  --font-sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "Cascadia Code", Consolas, monospace;
+}
+
+.hud-pill { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.hud-brand-mark { background: #101915; color: var(--accent); border: 1px solid #34443d; box-shadow: none; }
+.hud-btn:hover { box-shadow: none; }
+.time-machine-view { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 14px 34px rgba(0,0,0,.42); }
+html:focus-within button:focus-visible, body button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-faded, .hud-pill, .time-machine-view { transition: none !important; animation: none !important; }
+}

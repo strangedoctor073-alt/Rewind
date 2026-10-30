@@ -264,6 +264,17 @@ describe('RewindDaemon RPC method dispatch', () => {
     expect(String(res.reason)).toMatch(/not found/i)
   })
 
+  it('refuses to send synthetic Ctrl+Z to a recorded terminal process', async () => {
+    const db = (daemon as unknown as { db: { getMoments: (query: { limit: number }) => unknown[] } }).db
+    db.getMoments = () => [{
+      id: 'terminal-moment', timestamp: 1, app_name: 'pwsh.exe', window_title: 'PowerShell',
+      process_path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', pid: 123,
+    }]
+    const result = await dispatch('timeline.undo', { momentId: 'terminal-moment' })
+    expect(result.undone).toBe(false)
+    expect(String(result.reason)).toMatch(/terminal\/shell process/i)
+  })
+
   it('timeline.undo returns undone:false on non-Windows platform', async () => {
     // The mock DB returns [] for getMoments, so any valid-looking id that IS in the list
     // won't be found. We inject a moment directly to reach the platform check.

@@ -19,7 +19,9 @@ export interface DashboardMoment {
   domTarget?: string
 }
 
-export type DashboardViewMode = 'flow' | 'filmstrip' | 'diff' | 'telemetry'
+export type DashboardViewMode = 'timeline' | 'flow' | 'filmstrip' | 'diff' | 'telemetry'
+
+export type TimelineDataStatus = 'loading' | 'demo' | 'live' | 'stale' | 'empty'
 
 export interface TelemetryStats {
   focusScore: number // 0 - 100

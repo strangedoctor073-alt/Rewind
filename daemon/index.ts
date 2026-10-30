@@ -361,7 +361,8 @@ export class RewindDaemon {
         }
 
         // Synthetic Ctrl+Z via WScript.Shell — Windows only, no global keyboard hook installed.
-        // AppActivate focuses the window by title; SendKeys('^z') dispatches the keystroke.
+        // AppActivate must succeed before SendKeys; otherwise the keystroke could land in
+        // whichever unrelated window happened to have focus.
         if (process.platform !== 'win32') {
           return {
             undone: false,
@@ -380,11 +381,14 @@ export class RewindDaemon {
               [
                 '-NonInteractive', '-NoProfile', '-WindowStyle', 'Hidden',
                 '-Command',
-                `$ws = New-Object -COM WScript.Shell; $ws.AppActivate('${safeTitle}'); Start-Sleep -Milliseconds 150; $ws.SendKeys('^z')`,
+                `$ws = New-Object -COM WScript.Shell; $activated = $ws.AppActivate('${safeTitle}'); if (-not $activated) { exit 2 }; Start-Sleep -Milliseconds 150; $ws.SendKeys('^z')`,
               ],
-              { detached: true, stdio: 'ignore' },
+              { stdio: 'ignore' },
             )
-            const psTimer = setTimeout(() => resolve(), 3000)
+            const psTimer = setTimeout(() => {
+              ps.kill()
+              reject(new Error('PowerShell timed out; successful shortcut dispatch was not confirmed.'))
+            }, 3000)
             ps.on('error', (err) => { clearTimeout(psTimer); reject(err) })
             ps.on('close', (code) => {
               clearTimeout(psTimer)
@@ -394,13 +398,14 @@ export class RewindDaemon {
                 reject(new Error(`ps exit ${code}`))
               }
             })
-            ps.unref()
           })
           return { undone: true, momentId: undoMomentId, targetApp: undoTarget.appName, windowTitle: undoTarget.windowTitle }
         } catch (err) {
           return {
             undone: false,
-            reason: err instanceof Error ? err.message : 'Unknown PowerShell error',
+              reason: err instanceof Error && err.message === 'ps exit 2'
+                ? 'The recorded window could not be activated; no Undo shortcut was sent.'
+                : err instanceof Error ? err.message : 'Unknown PowerShell error',
             momentId: undoMomentId,
             targetApp: undoTarget.appName,
           }

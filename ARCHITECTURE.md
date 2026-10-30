@@ -10,9 +10,9 @@ REWIND is structured into five distinct subsystems, each serving a targeted purp
 | :--- | :--- | :--- | :--- |
 | `daemon/` | **Headless Background Daemon** | Node.js + TypeScript service capturing window switches, workspace state, and git branch context. Provides JSON-RPC and HTTP bridge. | SQLite in WAL mode (`%LOCALAPPDATA%\Rewind\timeline.db`), FTS5 index, TCP `48291`, Named Pipe `\\.\pipe\rewind-daemon-rpc`, HTTP `48292`. |
 | `desktop/` | **Desktop Time Machine** | Electron + Win32 FFI (Koffi) running a floating HUD pill and sandboxed overlay window. | 20s atomic WAL file (`rewind_session.wal`), AES-256-GCM encrypted state blobs via OS `safeStorage` (DPAPI), encrypted checkpoints. |
-| `extension/` & `extension-src/` | **Chrome MV3 Browser Recorder** | Hand-written background service worker and content script with React 19 timeline dashboard (`extension-src/`). | `chrome.storage.local` (with `unlimitedStorage`), typed runtime messaging. |
+| `extension/` & `extension-src/` | **Chrome MV3 Browser Recorder** | Hand-written background service worker and content script with React 19 timeline dashboard (`extension-src/`). | `chrome.storage.local`, typed runtime messaging, and storage-change notifications. |
 | `bin/` | **Command Line Interface (`rewind`)** | Executable CLI communicating with the daemon over named pipe or TCP JSON-RPC. | Newline-delimited JSON-RPC, 256-bit bearer token auth. |
-| `src/` | **Web Development Fixture** | Standalone Vite + React sandbox for UI scrubber, node graph, and audio feedback prototyping. | Local mock state (`RecordingEvent`, `ReplaySnapshot`). |
+| `src/` | **REWIND Studio and development fixture** | Vite + React Studio backed by the local daemon; its searchable timeline is the default, with Graph, Filmstrip, Compare, and Insights views. A separate sample-recording fixture is available only in development mode. | Authenticated local HTTP bridge for Studio data; fixture mode uses local mock state (`RecordingEvent`, `ReplaySnapshot`). |
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
