@@ -32,6 +32,7 @@ import { useDaemonRpc } from './hooks/useDaemonRpc'
 import { resurrectWorkspace, undoInApp } from './hooks/daemonClient'
 import { fallbackMoments } from './fixtures/fallbackMoments'
 import { TimelineView } from './timeline/TimelineView'
+import { getUndoFeedbackMessage } from './undoFeedback'
 
 interface RewindStudioApi {
   onShowCloseDialog?: (cb: () => void) => () => void
@@ -383,7 +384,7 @@ export const GrandDashboard: React.FC = () => {
           onResurrect={isLive ? (m, dryRun) => resurrectWorkspace(m.id, dryRun) : undefined}
           onUndo={isLive ? handleUndoInApp : undefined}
           undoBusy={undoBusy}
-          undoFeedback={undoFeedback?.momentId === selectedMoment?.id ? undoFeedback.message : null}
+          undoFeedback={getUndoFeedbackMessage(undoFeedback, selectedMoment?.id ?? null)}
         />
       </div>
 
