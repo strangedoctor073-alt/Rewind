@@ -126,6 +126,19 @@ export function resurrectWorkspace(momentId: string, dryRun: boolean): Promise<R
   return callDaemon<ResurrectReportView>('timeline.resurrectWorkspace', { momentId, dryRun }, 30_000)
 }
 
+export interface UndoMomentResult {
+  undone: boolean
+  reason?: string
+  momentId?: string
+  targetApp?: string
+  windowTitle?: string
+}
+
+/** Ask the daemon to send the target application's native Undo shortcut for a recorded moment. */
+export function undoInApp(momentId: string): Promise<UndoMomentResult> {
+  return callDaemon<UndoMomentResult>('timeline.undo', { momentId }, 8_000)
+}
+
 export interface RetentionSettings {
   retentionDays: number
   lastPurgedCount?: number

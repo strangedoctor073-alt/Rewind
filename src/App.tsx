@@ -284,7 +284,7 @@ function App() {
     return (
       <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
         <GrandDashboard />
-        <button
+        {import.meta.env.DEV && <button
           onClick={() => setAppMode('fixture')}
           style={{
             position: 'fixed',
@@ -304,7 +304,7 @@ function App() {
           title="Switch to Web Dev Scrubber Fixture"
         >
           🛒 Switch to Demo Fixture
-        </button>
+        </button>}
       </div>
     )
   }
@@ -355,11 +355,13 @@ function App() {
           <div className="recordings-list" id="recordings">
             {savedRecordings.length === 0 && <p className="empty-hint">Nothing saved in this browser yet</p>}
             {savedRecordings.map((item) => (
-              <button key={item.id} className={item.id === sessionId ? 'recording-row recording-row-active' : 'recording-row'} onClick={() => loadRecording(item)}>
-                <span>{item.title}</span>
-                <small>{item.events.length} events</small>
-                <i role="button" aria-label={`Delete ${item.title}`} onClick={(event) => removeRecording(event, item.id, item.title)}>×</i>
-              </button>
+              <div key={item.id} className="recording-row-wrap">
+                <button type="button" aria-pressed={item.id === sessionId} className={item.id === sessionId ? 'recording-row recording-row-active' : 'recording-row'} onClick={() => loadRecording(item)}>
+                  <span>{item.title}</span>
+                  <small>{item.events.length} events</small>
+                </button>
+                <button type="button" className="recording-delete" aria-label={`Delete ${item.title}`} title={`Delete ${item.title}`} onClick={(event) => removeRecording(event, item.id, item.title)}>×</button>
+              </div>
             ))}
           </div>
           <button onClick={() => importInput.current?.click()}>Import recording</button>

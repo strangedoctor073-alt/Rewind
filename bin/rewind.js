@@ -2,7 +2,7 @@
 
 /**
  * REWIND CLI Control Suite
- * Subcommands: start | stop | status | token | search | resurrect | undo | pause | export | help
+ * Subcommands: start | stop | status | token | search | resurrect | undo <momentId> | pause | export | help
  *
  * Communicates with the daemon via Named Pipe using NDJSON JSON-RPC 2.0.
  */
@@ -262,9 +262,15 @@ async function cmdSearch(query) {
   }
 }
 
-async function cmdUndo() {
+async function cmdUndo(momentId) {
+  if (typeof momentId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(momentId)) {
+    console.error(`${RED}✗ Usage: rewind undo <momentId>${RESET}`)
+    process.exitCode = 1
+    return
+  }
+
   try {
-    const result = await sendRpcCommand('timeline.undo')
+    const result = await sendRpcCommand('timeline.undo', { momentId })
     if (result.undone) {
       console.log(`${GREEN}✓ Undo performed.${RESET}`)
     } else {
@@ -502,7 +508,7 @@ ${CYAN}COMMANDS${RESET}
   ${GREEN}resurrect${RESET} <momentId> [--dry-run] Reopen the editor files, terminals and browser tabs from a moment
   ${GREEN}capture${RESET}                  Capture active window screenshot on demand
   ${GREEN}search${RESET} <query>           Full-text search across the timeline
-  ${GREEN}undo${RESET}                     Trigger universal undo (Ctrl+Z to foreground app)
+  ${GREEN}undo${RESET} <momentId>          Trigger Ctrl+Z in the app recorded for that moment
   ${GREEN}pause${RESET} [minutes]          Toggle recording pause (optional auto-resume)
   ${GREEN}autostart${RESET} <enable|disable|status> Manage Windows startup registration
   ${GREEN}export${RESET} [--branch <name>] Export provenance bundle for AI PR review
@@ -537,7 +543,7 @@ async function main() {
     case 'resurrect': return cmdResurrect(args.slice(1))
     case 'capture':   return cmdCapture()
     case 'search':    return cmdSearch(args.slice(1).join(' '))
-    case 'undo':      return cmdUndo()
+    case 'undo':      return cmdUndo(args[1])
     case 'pause':     return cmdPause(args[1])
     case 'autostart': return cmdAutostart(args[1]?.toLowerCase())
     case 'macro':     return cmdMacro(args.slice(1))

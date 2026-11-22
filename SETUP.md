@@ -10,7 +10,7 @@ Before starting, ensure you have the following installed:
 
 | Tool | Recommended Version | Notes |
 | :--- | :--- | :--- |
-| **Node.js** | `>= 18.0.0` (LTS recommended) | Verify with `node -v` |
+| **Node.js** | `>= 20.19.0` (LTS recommended) | Verify with `node -v` |
 | **npm** | `>= 9.0.0` | Verify with `npm -v` |
 | **OS** | Windows 10 / 11 (64-bit) | For native Win32 window APIs and DPAPI-backed key storage |
 | **Browser** | Google Chrome, Edge, Brave, or Arc | For loading the Manifest V3 extension |

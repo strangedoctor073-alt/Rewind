@@ -7,6 +7,7 @@ import {
   pingDaemon,
   rowToDashboardMoment,
   setStoredToken,
+  undoInApp,
 } from '../daemonClient'
 
 const realFetch = globalThis.fetch
@@ -71,6 +72,19 @@ describe('daemon client', () => {
     setStoredToken('tok')
     stubFetch(() => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: -32602, message: 'Unknown moment "x"' } }), { status: 200 }))
     await expect(callDaemon('timeline.resurrectWorkspace')).rejects.toThrow('Unknown moment')
+  })
+
+  it('sends Undo for the selected moment and preserves a truthful refusal reason', async () => {
+    setStoredToken('tok')
+    const calls = stubFetch(() => new Response(JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      result: { undone: false, momentId: 'm1', reason: 'The recorded window is no longer available.' },
+    }), { status: 200 }))
+    await expect(undoInApp('m1')).resolves.toEqual({ undone: false, momentId: 'm1', reason: 'The recorded window is no longer available.' })
+    const body = JSON.parse(String(calls[0].init?.body))
+    expect(body.method).toBe('timeline.undo')
+    expect(body.params).toEqual({ momentId: 'm1' })
   })
 
   it('maps a database row to a dashboard moment', () => {

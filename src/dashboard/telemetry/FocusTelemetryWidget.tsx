@@ -5,31 +5,10 @@
  * Renders a Focus Score gauge, app usage bars, 24-hour activity heatmap,
  * and distraction-spike summary — all driven by the daemon's FocusReport.
  *
- * Falls back to a rich demo dataset when the daemon is not connected.
+ * Shows no-data copy until the daemon provides a real report.
  */
 import React, { useMemo } from 'react'
 import type { FocusReport, AppCategory } from '../types'
-
-// ── Fallback demo data ────────────────────────────────────────────────────────
-
-const DEMO_REPORT: FocusReport = {
-  focusScore: 78,
-  contextSwitchesPerHour: 14,
-  totalDurationMinutes: 210,
-  distractionSpikeCount: 2,
-  appBreakdown: [
-    { appName: 'Code.exe', durationMs: 5400000, durationMinutes: 90, percentage: 43, category: 'ide' },
-    { appName: 'chrome.exe', durationMs: 2700000, durationMinutes: 45, percentage: 21, category: 'browser' },
-    { appName: 'WindowsTerminal.exe', durationMs: 2100000, durationMinutes: 35, percentage: 17, category: 'terminal' },
-    { appName: 'Slack.exe', durationMs: 1200000, durationMinutes: 20, percentage: 10, category: 'communication' },
-    { appName: 'Figma.exe', durationMs: 600000, durationMinutes: 10, percentage: 5, category: 'design' },
-  ],
-  hourlyHeatmap: Array.from({ length: 24 }, (_, h) => ({
-    hour: h,
-    focusScore: h >= 9 && h <= 18 ? Math.max(20, 90 - Math.abs(h - 13) * 8) : h >= 19 ? 30 : 0,
-    momentCount: h >= 9 && h <= 18 ? 12 + Math.floor(Math.random() * 20) : h >= 19 ? 4 : 0,
-  })),
-}
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 
@@ -198,8 +177,16 @@ interface FocusTelemetryWidgetProps {
 }
 
 export const FocusTelemetryWidget: React.FC<FocusTelemetryWidgetProps> = ({ report }) => {
-  const data = report ?? DEMO_REPORT
-  const isDemo = report === null
+  if (!report) {
+    return (
+      <section className="insights-empty" aria-labelledby="insights-title">
+        <p className="timeline-eyebrow">INSIGHTS</p>
+        <h1 id="insights-title">Insights will appear here</h1>
+        <p>Connect the local daemon and record some activity first. REWIND won’t invent focus scores or usage patterns.</p>
+      </section>
+    )
+  }
+  const data = report
   const top5 = data.appBreakdown.slice(0, 5)
 
   return (
@@ -213,12 +200,9 @@ export const FocusTelemetryWidget: React.FC<FocusTelemetryWidgetProps> = ({ repo
     }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-        <span style={{ fontSize: 20 }}>📊</span>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Focus & Productivity Analytics</div>
-          <div style={{ fontSize: 11, color: isDemo ? '#f59e0b' : '#10b981', marginTop: 2 }}>
-            {isDemo ? '⚠ Demo data — connect daemon for live analytics' : '● Live data from daemon'}
-          </div>
+          <div style={{ fontSize: 11, color: '#69d5a5', marginTop: 2 }}>Live data from local daemon</div>
         </div>
       </div>
 

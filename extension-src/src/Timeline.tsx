@@ -39,57 +39,66 @@ function Timeline() {
     selectedIdRef.current = selectedId
   }, [selectedId])
 
-  const showToast = (message: string) => {
+  const showToast = useCallback((message: string) => {
     setNotice(message)
     if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
     noticeTimerRef.current = window.setTimeout(() => setNotice(null), 4000)
-  }
+  }, [])
 
-  const selectRecording = (id: string | null) => {
+  const selectRecording = useCallback((id: string | null) => {
+    selectedIdRef.current = id
     setSelectedId(id)
     setSelectedEventId(null)
     if (!id) setSelectedRecording(null)
-  }
-
-  // Poll the index rather than wiring chrome.storage.onChanged
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const list = await listRecordings()
-        if (cancelled) return
-        setRecordings(list)
-        if (!selectedIdRef.current && list[0]) selectRecording(list[0].id)
-      } catch {
-        if (!cancelled) showToast('Could not reach the REWIND background service.')
-      }
-    }
-    void load()
-    const interval = window.setInterval(load, 2000)
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
   }, [])
 
-  useEffect(() => {
-    if (!selectedId) return
-    let cancelled = false
-    const load = async () => {
-      try {
-        const full = await getRecording(selectedId)
-        if (!cancelled) setSelectedRecording(full)
-      } catch {
-        // transient error
+  const loadIndex = useCallback(async () => {
+    try {
+      const list = await listRecordings()
+      setRecordings(list)
+      if (!selectedIdRef.current && list[0]) selectRecording(list[0].id)
+      if (selectedIdRef.current && !list.some((item) => item.id === selectedIdRef.current)) {
+        selectRecording(list[0]?.id ?? null)
       }
+    } catch {
+      showToast('Could not reach the REWIND background service.')
     }
-    void load()
-    const interval = window.setInterval(load, 1500)
+  }, [selectRecording, showToast])
+
+  const loadSelected = useCallback(async (id: string) => {
+    try {
+      const full = await getRecording(id)
+      if (selectedIdRef.current === id) setSelectedRecording(full)
+    } catch {
+      showToast('Could not refresh this browser recording.')
+    }
+  }, [showToast])
+
+  // Refresh only when the extension's recording index or selected recording changes.
+  useEffect(() => {
+    const onChanged = (changes: Record<string, { oldValue?: unknown; newValue?: unknown }>, areaName: string) => {
+      if (areaName !== 'local') return
+      if (changes['rewind:index']) void loadIndex()
+      const id = selectedIdRef.current
+      if (id && changes[`rewind:recording:${id}`]) void loadSelected(id)
+    }
+    const initialLoad = window.setTimeout(() => { void loadIndex() }, 0)
+    chrome.storage.onChanged.addListener(onChanged)
     return () => {
-      cancelled = true
-      window.clearInterval(interval)
+      window.clearTimeout(initialLoad)
+      chrome.storage.onChanged.removeListener(onChanged)
     }
-  }, [selectedId])
+  }, [loadIndex, loadSelected])
+
+  useEffect(() => {
+    if (!selectedId) return undefined
+    const initialLoad = window.setTimeout(() => { void loadSelected(selectedId) }, 0)
+    return () => window.clearTimeout(initialLoad)
+  }, [selectedId, loadSelected])
+
+  useEffect(() => () => {
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
+  }, [])
 
   const events = useMemo(() => selectedRecording?.events ?? [], [selectedRecording])
 
@@ -116,19 +125,27 @@ function Timeline() {
 
   const handleDelete = async (event: ReactMouseEvent, id: string) => {
     event.stopPropagation()
-    await deleteRecording(id)
-    const list = await listRecordings()
-    setRecordings(list)
-    showToast('Recording deleted from history.')
-    if (id === selectedId) selectRecording(list[0]?.id ?? null)
+    try {
+      await deleteRecording(id)
+      const list = await listRecordings()
+      setRecordings(list)
+      showToast('Recording deleted from history.')
+      if (id === selectedId) selectRecording(list[0]?.id ?? null)
+    } catch (error) {
+      showToast(error instanceof Error ? `Could not delete recording: ${error.message}` : 'Could not delete recording.')
+    }
   }
 
   const handleClear = async () => {
     if (!window.confirm('Clear every recording saved in this extension? This cannot be undone.')) return
-    await clearHistory()
-    setRecordings([])
-    selectRecording(null)
-    showToast('All recording history cleared.')
+    try {
+      await clearHistory()
+      setRecordings([])
+      selectRecording(null)
+      showToast('All recording history cleared.')
+    } catch (error) {
+      showToast(error instanceof Error ? `Could not clear history: ${error.message}` : 'Could not clear history.')
+    }
   }
 
   const handleExport = () => {
@@ -152,8 +169,8 @@ function Timeline() {
       setCopiedSelector(true)
       showToast(`Copied selector "${selectedEvent.target}" to clipboard`)
       setTimeout(() => setCopiedSelector(false), 2000)
-    })
-  }, [selectedEvent])
+    }).catch(() => showToast('Could not access the clipboard.'))
+  }, [selectedEvent, showToast])
 
   const handleRewind = useCallback(async () => {
     if (!selectedRecording || !selectedEvent) return
@@ -166,7 +183,7 @@ function Timeline() {
     } finally {
       setBusy(false)
     }
-  }, [selectedRecording, selectedEvent])
+  }, [selectedRecording, selectedEvent, showToast])
 
   // Keyboard navigation
   useEffect(() => {
@@ -257,29 +274,25 @@ function Timeline() {
             )}
 
             {filteredRecordings.map((item) => (
-              <button
-                key={item.id}
-                className={item.id === selectedId ? 'history-row history-row-active' : 'history-row'}
-                onClick={() => selectRecording(item.id)}
-              >
-                <div className="row-main">
-                  {item.active && <i className="live-dot" title="Actively recording" />}
-                  <span className="history-row-title">{item.title}</span>
-                  <i
-                    role="button"
-                    aria-label={`Delete ${item.title}`}
-                    className="delete-x"
-                    onClick={(event) => handleDelete(event, item.id)}
-                  >
-                    ×
-                  </i>
-                </div>
-                <div className="row-sub">
-                  <span className="row-host">{item.host || 'unknown site'}</span>
-                  <span>{item.eventCount} events</span>
-                  <span>{formatTime(item.duration)}</span>
-                </div>
-              </button>
+              <div key={item.id} className="history-row-wrap">
+                <button
+                  type="button"
+                  className={item.id === selectedId ? 'history-row history-row-active' : 'history-row'}
+                  aria-pressed={item.id === selectedId}
+                  onClick={() => selectRecording(item.id)}
+                >
+                  <div className="row-main">
+                    {item.active && <i className="live-dot" title="Actively recording" />}
+                    <span className="history-row-title">{item.title}</span>
+                  </div>
+                  <div className="row-sub">
+                    <span className="row-host">{item.host || 'unknown site'}</span>
+                    <span>{item.eventCount} events</span>
+                    <span>{formatTime(item.duration)}</span>
+                  </div>
+                </button>
+                <button type="button" aria-label={`Delete ${item.title}`} title={`Delete ${item.title}`} className="delete-x" onClick={(event) => void handleDelete(event, item.id)}>×</button>
+              </div>
             ))}
           </div>
         </aside>

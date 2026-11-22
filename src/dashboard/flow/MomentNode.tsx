@@ -1,6 +1,5 @@
 import React from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { audioEngine } from '../../audio/synth'
 import type { DashboardMoment } from '../types'
 
 interface MomentNodeProps {
@@ -8,7 +7,6 @@ interface MomentNodeProps {
     moment: DashboardMoment
     isSelected?: boolean
     onSelect?: (moment: DashboardMoment) => void
-    onJump?: (moment: DashboardMoment) => void
   }
 }
 
@@ -22,28 +20,21 @@ const isNonRestorableMoment = (moment: DashboardMoment): boolean => {
 }
 
 export const MomentNode: React.FC<MomentNodeProps> = ({ data }) => {
-  const { moment, isSelected, onSelect, onJump } = data
+  const { moment, isSelected, onSelect } = data
   const isNonRestorable = isNonRestorableMoment(moment)
 
-  const handleMouseEnter = () => {
-    audioEngine.playTick(1.2)
-  }
-
-  const handleJump = (e: React.MouseEvent) => {
+  const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (isNonRestorable) return
-    audioEngine.playWhoosh()
-    if (onJump) onJump(moment)
+    onSelect?.(moment)
   }
 
   return (
     <div
       className={`moment-node ${isSelected ? 'selected' : ''} ${isNonRestorable ? 'non-restorable' : ''}`}
-      style={isNonRestorable ? { borderColor: 'rgba(251, 191, 36, 0.45)', opacity: 0.82 } : undefined}
+      style={isNonRestorable ? { borderColor: 'rgba(214, 182, 94, 0.45)' } : undefined}
       onClick={() => onSelect?.(moment)}
-      onMouseEnter={handleMouseEnter}
     >
-      <Handle type="target" position={Position.Top} style={{ background: '#00f0ff' }} />
+      <Handle type="target" position={Position.Top} style={{ background: '#69d5a5' }} />
 
       <div className="moment-node-header">
         <span className="moment-node-badge">{moment.appName}</span>
@@ -52,17 +43,17 @@ export const MomentNode: React.FC<MomentNodeProps> = ({ data }) => {
             style={{
               fontSize: '0.65rem',
               fontWeight: 600,
-              color: '#fbbf24',
-              background: 'rgba(251, 191, 36, 0.15)',
-              border: '1px solid rgba(251, 191, 36, 0.3)',
+              color: '#d6b65e',
+              background: 'rgba(214, 182, 94, 0.12)',
+              border: '1px solid rgba(214, 182, 94, 0.3)',
               borderRadius: '4px',
               padding: '1px 5px',
               marginLeft: '4px',
               cursor: 'help',
             }}
-            title="System component or missing executable — resurrection disabled."
+            title="Recovery classification is based on recorded process metadata; review the restore preview before taking action."
           >
-            🛡️ Non-Restorable
+            Recovery uncertain
           </span>
         )}
         <span className="moment-node-time" style={{ marginLeft: 'auto' }}>
@@ -75,19 +66,16 @@ export const MomentNode: React.FC<MomentNodeProps> = ({ data }) => {
       </div>
 
       <div className="moment-node-preview">
-        {moment.ocrText ? (
-          <span style={{ padding: '0 8px', textAlign: 'center', opacity: 0.85 }}>
-            "{moment.ocrText.slice(0, 50)}..."
-          </span>
-        ) : (
-          <span>Geometry: {moment.bounds?.width || 1280} × {moment.bounds?.height || 720}</span>
-        )}
+        {moment.screenshotUrl
+          ? <img src={moment.screenshotUrl} alt={`Captured window from ${moment.appName}`} />
+          : <span>Screenshot preview unavailable</span>}
       </div>
+      {moment.ocrText && <div className="moment-node-ocr"><strong>OCR text</strong><span>{moment.ocrText.slice(0, 90)}</span></div>}
 
       <div className="moment-node-footer">
         {moment.gitBranch && (
-          <span style={{ fontSize: '0.7rem', color: '#00f0ff' }}>
-            🌿 {moment.gitBranch}
+          <span style={{ fontSize: '0.7rem', color: '#69d5a5' }}>
+            Branch · {moment.gitBranch}
           </span>
         )}
         <button
@@ -96,18 +84,16 @@ export const MomentNode: React.FC<MomentNodeProps> = ({ data }) => {
             padding: '4px 10px',
             fontSize: '0.72rem',
             marginLeft: 'auto',
-            opacity: isNonRestorable ? 0.4 : 1,
-            cursor: isNonRestorable ? 'not-allowed' : 'pointer',
+            cursor: 'pointer',
           }}
-          onClick={handleJump}
-          disabled={isNonRestorable}
-          title={isNonRestorable ? 'Internal system UI component — resurrection disabled' : 'Relaunch application or bring to foreground'}
+          onClick={handleSelect}
+          title="Select this moment in the Graph view"
         >
-          ↶ Jump
+          Select
         </button>
       </div>
 
-      <Handle type="source" position={Position.Bottom} style={{ background: '#00f0ff' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: '#69d5a5' }} />
     </div>
   )
 }

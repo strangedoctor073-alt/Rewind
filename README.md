@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>A local-first window-activity timeline, app-level undo hotkey, and in-browser interaction recorder.</strong><br />
-  Jump back through the apps and windows you used, relaunch what you closed, and record &amp; replay web sessions. Everything stays on your machine.
+  Browse your local activity timeline, preview workspace restoration, and record &amp; replay browser interactions. Restoration is best-effort and depends on the recorded app and available files; everything stays on your machine.
 </p>
 
 <p align="center">
@@ -22,12 +22,13 @@
 
 ## What's New in REWIND v6.0
 
-- **Deep Workspace Resurrection**: Reopen VS Code/Cursor files, Windows Terminal directories, and browser tabs with best-effort multi-monitor window geometry placement (`rewind resurrect <momentId> [--dry-run]` or dashboard **⚡ Resurrect Workspace**). Note: Geometry restoration is best-effort and terminal resurrection re-opens the directory without restoring shell command output or history.
+- **Workspace Restore Preview**: Inspect the apps, files, and browser tabs REWIND can reopen before launching them (`rewind resurrect <momentId> --dry-run` or Studio **Preview**). Restore remains best-effort: terminal recovery reopens a directory, not command output or shell history.
 - **Automated Macro Exporters (Labs)**:
   - `rewind macro export --format playwright --output flow.spec.ts`: Turn recorded web sessions into clean, runnable Playwright tests with automatic environment-variable secret masking (`process.env.SECRET`).
   - `rewind macro export --format powershell --output script.ps1`: Generate idempotent PowerShell automation with elevation checks and secure string masking.
 - **Cognitive Standup & AI Synthesizer (Labs)**: Generate daily standup summaries, timesheet activity logs, and commit drafts powered by Ollama (`ai.standup` RPC with heuristic offline fallback). Requires a running local Ollama instance on port 11434.
-- **Focus & Productivity Intelligence**: Deep Focus score (0–100), context-switch velocity, distraction spike detection, and 24h interactive activity heatmaps via `FocusTelemetryWidget.tsx` and `rewind status`.
+- **Focus & Productivity Insights**: Focus score, context-switch data, and activity reports appear only when returned by the local daemon; the UI shows an explicit no-report state otherwise.
+- **Timeline-first Studio**: Searchable chronological activity is the primary view. Graph, Filmstrip, Compare, and Insights remain available as alternate views over recorded data.
 - **Client-Side Encrypted Timeline Vaults**: `rewind vault create <file.vault>` / `rewind vault restore <file.vault>` — AES-256-GCM + PBKDF2 (600k rounds per OWASP guidelines) encrypted timeline backups with gzip compression.
 - **Fail-Closed State Encryption**: State blobs use OS-protected keys (Electron `safeStorage` / DPAPI on Windows). The system refuses to store sensitive state if the secure store is unavailable rather than degrading to weak obfuscation.
 - Full detailed evolution and fixes: [CHANGELOG.md](CHANGELOG.md).
@@ -38,7 +39,7 @@
 - **Headless Background Daemon & CLI (`rewind`)**: Run completely headless in the background with JSON-RPC over Named Pipes and TCP. Full control via `rewind start/stop/status/capture/search/autostart`.
 - **Native Framebuffer Capture & 64-bit dHash**: Captures window framebuffers via Win32 `PrintWindow` with gradient difference hashing to eliminate idle duplicate frames.
 - **SQLite + FTS5 Full-Text Search**: Embedded, zero-cloud timeline database with fast full-text search across applications and browser DOM events.
-- **Grand Dashboard Studio**: Cyber-minimalist visual node graph powered by `@xyflow/react`, Filmstrip scrubber, Curtain Diff visual comparator, and `Ctrl+K` Omnibox.
+- **Grand Dashboard Studio**: Searchable chronological timeline first, with optional `@xyflow/react` Graph, Filmstrip, Compare, and `Ctrl+K` search.
 - **Procedural Web Audio Engine**: Zero-asset procedural oscillator synthesizer for mechanical ticks, sweeps, and hotkey feedback.
 - **Stability & Anti-Freeze Hardening**: Native `IsHungAppWindow` protection so deadlocked target applications never lock up REWIND.
 
@@ -49,7 +50,7 @@
 | Mode | Purpose | Command |
 | :--- | :--- | :--- |
 | **REWIND CLI & Daemon** | Headless background capture, SQLite search, and autostart | `npm run cli -- help` or `rewind start` |
-| **Grand Dashboard Studio** | Interactive node graph, Curtain Diff, and Filmstrip | `npm run dev` |
+| **Grand Dashboard Studio** | Timeline-first activity history, Graph, Filmstrip, Compare, and Insights | `npm run dev` |
 | **Desktop Floating HUD** | Always-on-top pill and overlay with app-level undo | `npm run desktop` |
 | **Chrome MV3 Extension** | Browser DOM interaction recorder & scroll restoration | `npm run build:extension` |
 
