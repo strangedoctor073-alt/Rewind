@@ -20,28 +20,28 @@
 
 ---
 
-## What's New in REWIND v6.0
+## Architecture & Engineering Highlights
 
-- **Workspace Restore Preview**: Inspect the apps, files, and browser tabs REWIND can reopen before launching them (`rewind resurrect <momentId> --dry-run` or Studio **Preview**). Restore remains best-effort: terminal recovery reopens a directory, not command output or shell history.
-- **Automated Macro Exporters (Labs)**:
-  - `rewind macro export --format playwright --output flow.spec.ts`: Turn recorded web sessions into clean, runnable Playwright tests with automatic environment-variable secret masking (`process.env.SECRET`).
-  - `rewind macro export --format powershell --output script.ps1`: Generate idempotent PowerShell automation with elevation checks and secure string masking.
-- **Cognitive Standup & AI Synthesizer (Labs)**: Generate daily standup summaries, timesheet activity logs, and commit drafts powered by Ollama (`ai.standup` RPC with heuristic offline fallback). Requires a running local Ollama instance on port 11434.
-- **Focus & Productivity Insights**: Focus score, context-switch data, and activity reports appear only when returned by the local daemon; the UI shows an explicit no-report state otherwise.
-- **Timeline-first Studio**: Searchable chronological activity is the primary view. Graph, Filmstrip, Compare, and Insights remain available as alternate views over recorded data.
-- **Client-Side Encrypted Timeline Vaults**: `rewind vault create <file.vault>` / `rewind vault restore <file.vault>` — AES-256-GCM + PBKDF2 (600k rounds per OWASP guidelines) encrypted timeline backups with gzip compression.
-- **Fail-Closed State Encryption**: State blobs use OS-protected keys (Electron `safeStorage` / DPAPI on Windows). The system refuses to store sensitive state if the secure store is unavailable rather than degrading to weak obfuscation.
-- Full detailed evolution and fixes: [CHANGELOG.md](CHANGELOG.md).
+- **Desktop Time Machine (Windows Shell)**: Built on Electron with Koffi Win32 FFI bindings. Tracks foreground window transitions, coordinates, and module handles via native GDI (`PrintWindow`, `GetWindowTextW`, `QueryFullProcessImageNameW`). Includes an always-on-top HUD overlay with global `Ctrl+Alt+Z` hotkey toggling.
+- **Headless Daemon & Storage Engine**: Background Node/TypeScript service exposing dual-transport JSON-RPC over Windows Named Pipes (`\\.\pipe\rewind-daemon-rpc`) and TCP (`127.0.0.1:48291`), with an authenticated HTTP bridge (`127.0.0.1:48292`). Backed by embedded SQLite in WAL mode with FTS5 full-text search.
+- **In-Browser Interaction Recorder (Chrome MV3)**: Manifest V3 extension capturing user interactions (clicks, inputs, scrolls) on HTTP(S) pages with an asynchronous debounced flush queue and backoff retries.
+- **Client-Side Encrypted Timeline Vaults**: `rewind vault create <file.vault>` / `rewind vault restore <file.vault>` — AES-256-GCM + PBKDF2 (600,000 iterations per OWASP guidelines) encrypted timeline backups with gzip compression.
+- **Fail-Closed State Encryption**: State blobs use OS-protected keys (Electron `safeStorage` / Windows DPAPI). If the secure store is unavailable, REWIND fails closed rather than degrading to weak obfuscation.
 
+---
 
-## What Was New in REWIND v2.0
+## 🛠️ Low-Level Engineering Invariants & Deep Dives
 
-- **Headless Background Daemon & CLI (`rewind`)**: Run completely headless in the background with JSON-RPC over Named Pipes and TCP. Full control via `rewind start/stop/status/capture/search/autostart`.
-- **Native Framebuffer Capture & 64-bit dHash**: Captures window framebuffers via Win32 `PrintWindow` with gradient difference hashing to eliminate idle duplicate frames.
-- **SQLite + FTS5 Full-Text Search**: Embedded, zero-cloud timeline database with fast full-text search across applications and browser DOM events.
-- **Grand Dashboard Studio**: Searchable chronological timeline first, with optional `@xyflow/react` Graph, Filmstrip, Compare, and `Ctrl+K` search.
-- **Procedural Web Audio Engine**: Zero-asset procedural oscillator synthesizer for mechanical ticks, sweeps, and hotkey feedback.
-- **Stability & Anti-Freeze Hardening**: Native `IsHungAppWindow` protection so deadlocked target applications never lock up REWIND.
+Engineering systems software at the OS boundary requires handling edge cases that generic abstractions miss:
+
+1. **Win32 Buffer Null-Byte Padding**:
+   When reading process paths via Win32 FFI (`QueryFullProcessImageNameW`), fixed-length native buffers terminate strings with null bytes (`\0`). Passing these unmanaged strings directly to Node's `fs.existsSync()` causes silent failures or unhandled exceptions. REWIND enforces regex sanitization (`.replace(/\0+$/, '').trim()`) on all FFI strings before file resolution or process relaunching.
+2. **Terminal Suspend Protection during App-Level Undo**:
+   Synthetic keystroke dispatching to external windows can be hazardous. REWIND verifies window focus via a 500ms handshake before dispatching `Ctrl+Z`. Furthermore, terminal processes (`cmd.exe`, `powershell.exe`, `wt.exe`, `bash.exe`) are explicitly excluded to prevent dispatching ASCII `0x1A` (substitute / `SIGTSTP`), which would suspend active terminal subprocesses.
+3. **Crash-Resilient 20-Second Atomic WAL Writes**:
+   Periodic state persistence (`backupEngine.js`) writes state dumps every 20 seconds. Direct overwrites (`fs.writeFileSync`) risk corrupting timeline state if an unexpected power loss or process kill occurs mid-write. REWIND writes dumps to `.tmp` files first, followed by an atomic OS file rename (`fs.renameSync`).
+4. **Zero-Keylogging Ghost Shield**:
+   REWIND strictly forbids installing global keyboard hooks (`WH_KEYBOARD_LL`). Interaction capture is restricted to DOM-level events in the Chrome extension and window focus changes in desktop capture. Sensitive inputs (`type="password"` and credit card / CVV / SSN patterns) are masked immediately at the capture boundary.
 
 ---
 
@@ -167,7 +167,7 @@ Open `http://localhost:5173/` to try timeline scrubbing, undo/redo (`Ctrl/Cmd+Z`
 ## Development & Testing
 
 ```bash
-npm test          # 269 tests across 39 suites (Vitest)
+npm test          # 284 tests across 41 suites (Vitest, 100% passing)
 npm run lint      # ESLint (0 errors, 0 warnings)
 npm run build     # typecheck + web build
 npm run build:daemon
