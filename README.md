@@ -1,191 +1,84 @@
 # REWIND ↶
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/strangedoctor073-alt/Rewind/main/src/assets/hero.png" alt="REWIND Banner" width="700" style="max-width: 100%; border-radius: 12px;" />
-</p>
+A local-first Windows activity time machine, app-level undo hotkey, and browser interaction recorder.
 
-<p align="center">
-  <strong>A local-first window-activity timeline, app-level undo hotkey, and in-browser interaction recorder.</strong><br />
-  Browse your local activity timeline, preview workspace restoration, and record &amp; replay browser interactions. Restoration is best-effort and depends on the recorded app and available files; everything stays on your machine.
-</p>
-
-<p align="center">
-  <a href="https://github.com/strangedoctor073-alt/Rewind/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/strangedoctor073-alt/Rewind/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status" /></a>
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Chrome%20MV3-blue?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/Desktop-Electron%20(Windows)-61dafb?style=flat-square" alt="Desktop: Electron on Windows" />
-  <img src="https://img.shields.io/badge/Storage-Local--First%20SQLite-blue?style=flat-square" alt="Local-First SQLite" />
-  <img src="https://img.shields.io/badge/Backups-20s%20auto--save-success?style=flat-square" alt="20s Atomic WAL" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License: MIT" /></a>
-</p>
+[![CI Status](https://img.shields.io/github/actions/workflow/status/strangedoctor073-alt/Rewind/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/strangedoctor073-alt/Rewind/actions)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Chrome%20MV3-blue?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-284%20passed-success?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
 ---
 
-## Architecture & Engineering Highlights
+## What It Is
 
-- **Desktop Time Machine (Windows Shell)**: Built on Electron with Koffi Win32 FFI bindings. Tracks foreground window transitions, coordinates, and module handles via native GDI (`PrintWindow`, `GetWindowTextW`, `QueryFullProcessImageNameW`). Includes an always-on-top HUD overlay with global `Ctrl+Alt+Z` hotkey toggling.
-- **Headless Daemon & Storage Engine**: Background Node/TypeScript service exposing dual-transport JSON-RPC over Windows Named Pipes (`\\.\pipe\rewind-daemon-rpc`) and TCP (`127.0.0.1:48291`), with an authenticated HTTP bridge (`127.0.0.1:48292`). Backed by embedded SQLite in WAL mode with FTS5 full-text search.
-- **In-Browser Interaction Recorder (Chrome MV3)**: Manifest V3 extension capturing user interactions (clicks, inputs, scrolls) on HTTP(S) pages with an asynchronous debounced flush queue and backoff retries.
-- **Client-Side Encrypted Timeline Vaults**: `rewind vault create <file.vault>` / `rewind vault restore <file.vault>` — AES-256-GCM + PBKDF2 (600,000 iterations per OWASP guidelines) encrypted timeline backups with gzip compression.
-- **Fail-Closed State Encryption**: State blobs use OS-protected keys (Electron `safeStorage` / Windows DPAPI). If the secure store is unavailable, REWIND fails closed rather than degrading to weak obfuscation.
+REWIND captures local window activity, tracks process geometry, and lets you rewind activity, resurrect closed workspaces, and record browser interactions. Everything is stored locally on your machine with zero cloud dependencies.
 
----
-
-## 🛠️ Low-Level Engineering Invariants & Deep Dives
-
-Engineering systems software at the OS boundary requires handling edge cases that generic abstractions miss:
-
-1. **Win32 Buffer Null-Byte Padding**:
-   When reading process paths via Win32 FFI (`QueryFullProcessImageNameW`), fixed-length native buffers terminate strings with null bytes (`\0`). Passing these unmanaged strings directly to Node's `fs.existsSync()` causes silent failures or unhandled exceptions. REWIND enforces regex sanitization (`.replace(/\0+$/, '').trim()`) on all FFI strings before file resolution or process relaunching.
-2. **Terminal Suspend Protection during App-Level Undo**:
-   Synthetic keystroke dispatching to external windows can be hazardous. REWIND verifies window focus via a 500ms handshake before dispatching `Ctrl+Z`. Furthermore, terminal processes (`cmd.exe`, `powershell.exe`, `wt.exe`, `bash.exe`) are explicitly excluded to prevent dispatching ASCII `0x1A` (substitute / `SIGTSTP`), which would suspend active terminal subprocesses.
-3. **Crash-Resilient 20-Second Atomic WAL Writes**:
-   Periodic state persistence (`backupEngine.js`) writes state dumps every 20 seconds. Direct overwrites (`fs.writeFileSync`) risk corrupting timeline state if an unexpected power loss or process kill occurs mid-write. REWIND writes dumps to `.tmp` files first, followed by an atomic OS file rename (`fs.renameSync`).
-4. **Zero-Keylogging Ghost Shield**:
-   REWIND strictly forbids installing global keyboard hooks (`WH_KEYBOARD_LL`). Interaction capture is restricted to DOM-level events in the Chrome extension and window focus changes in desktop capture. Sensitive inputs (`type="password"` and credit card / CVV / SSN patterns) are masked immediately at the capture boundary.
+- **Desktop Shell (`desktop/`)**: Electron app with Koffi Win32 FFI bindings (`PrintWindow`, `QueryFullProcessImageNameW`, `SetForegroundWindow`). Features an always-on-top floating HUD pill toggled globally with `Ctrl+Alt+Z`.
+- **Background Daemon (`daemon/`)**: Headless Node/TypeScript service with embedded SQLite in WAL mode, FTS5 full-text search, and dual-transport JSON-RPC over Named Pipes (`\\.\pipe\rewind-daemon-rpc`) and TCP (`48291`).
+- **Browser Extension (`extension/`)**: Chrome Manifest V3 extension that records DOM clicks, inputs, and scrolls with client-side credential masking (passwords, credit cards).
+- **Studio Dashboard (`src/dashboard/`)**: Chronological timeline interface to search, inspect past moments, and preview workspace restoration.
 
 ---
 
-## Choose Your Surface
+## Engineering Details
 
-| Mode | Purpose | Command |
-| :--- | :--- | :--- |
-| **REWIND CLI & Daemon** | Headless background capture, SQLite search, and autostart | `npm run cli -- help` or `rewind start` |
-| **Grand Dashboard Studio** | Timeline-first activity history, Graph, Filmstrip, Compare, and Insights | `npm run dev` |
-| **Desktop Floating HUD** | Always-on-top pill and overlay with app-level undo | `npm run desktop` |
-| **Chrome MV3 Extension** | Browser DOM interaction recorder & scroll restoration | `npm run build:extension` |
-
----
-
-## What It Does
-
-**1. Headless Daemon & Local Storage (`daemon/`)**
-- Runs in the background, recording window switches, active window bounds, and git branch context.
-- Stores historical events in SQLite (`%LOCALAPPDATA%\Rewind\timeline.db`) in WAL mode with FTS5 search.
-- Dual-transport RPC server (`127.0.0.1:48291` and `\\.\pipe\rewind-daemon-rpc`, newline-delimited JSON-RPC, not HTTP) protected by 256-bit authentication tokens, plus an authenticated HTTP bridge on `127.0.0.1:48292` for the dashboard and extension.
-- Start it with `npm run build:daemon && rewind start` (or `npm run daemon` to run it in the foreground and see errors).
-
-**2. Desktop Time Machine (`desktop/`)**
-- Floating HUD pill expandable to a full Time Machine dashboard via global `Ctrl+Alt+Z`.
-- Relaunch closed applications with preserved positions; resurrect terminal sessions in their last working directory (shell history and command outputs are not restored).
-- App-Level Undo (`Ctrl+Z`) verified with a 500ms foreground switch handshake (terminal processes excluded to prevent sending break/suspend signals).
-- 20-second atomic WAL auto-backup and encrypted snapshot export.
-
-**3. In-Browser Interaction Recording (`extension/`)**
-- Records clicks, inputs (with passwords and credit cards masked), and scrolls on any http(s) page.
-- In-memory event batch queue with debounced storage flushes to eliminate disk thrashing.
-
----
+- **Win32 String Sanitization**: Native process paths from `QueryFullProcessImageNameW` are sanitized to strip trailing null bytes (`\0`) before filesystem lookups.
+- **Terminal Protection**: App-level `Ctrl+Z` undo dispatches only after a verified 500ms window focus handshake; terminal processes are excluded to avoid sending `SIGTSTP` / `0x1A`.
+- **Atomic Persistence**: Auto-backup engine writes dumps to `.tmp` files first, performing an atomic rename (`fs.renameSync`) every 20 seconds to prevent WAL corruption.
+- **Encrypted Vaults**: Timeline exports are encrypted using AES-256-GCM with PBKDF2 key derivation (600,000 iterations). State blobs use Windows DPAPI via Electron `safeStorage`.
+- **Zero Keylogging**: Never uses global keyboard hooks (`WH_KEYBOARD_LL`). Capture is restricted to window focus events and explicit in-browser DOM events.
 
 ---
 
 ## Quick Start
 
-For detailed setup, see **[SETUP.md](SETUP.md)**. Requires Node.js 20.19+ (CI uses 22).
-
-### 1. Desktop Time Machine (Windows)
+Requirements: Node.js 20.19+ on Windows.
 
 ```bash
-git clone https://github.com/strangedoctor073-alt/Rewind.git
-cd Rewind
+# 1. Install dependencies
 npm install
+
+# 2. Run the Desktop Time Machine (Electron HUD)
 npm run desktop
-```
 
-- Press **`Ctrl+Alt+Z`** anywhere to open or close the Time Machine.
-- Press **`Ctrl+K`** (with the Time Machine open) to search windows, apps and titles.
-- Click **`Resurrect Shell`** / **`Jump Here`** on a closed-window card to relaunch it.
-- Click **`Export 5s GIF`** to save a title-card GIF to your Downloads folder.
-- Click the speaker icon to toggle the scrub sound.
-
-### 2. Chrome extension
-
-```bash
+# 3. Build & load the Chrome Extension
 npm run build:extension
-```
+# Load unpacked 'extension/' directory in chrome://extensions/
 
-1. Open `chrome://extensions/` in Chrome or any Chromium browser.
-2. Enable **Developer mode**.
-3. Click **Load unpacked** and select the `extension/` directory.
-4. Pin **REWIND** to your toolbar.
-
-### 3. Component dev fixture
-
-```bash
+# 4. Run Studio Dashboard (Web)
 npm run dev
+
+# 5. Run Headless Daemon & CLI
+npm run build:daemon
+node bin/rewind.js start
+node bin/rewind.js status
 ```
 
-Open `http://localhost:5173/` to try timeline scrubbing, undo/redo (`Ctrl/Cmd+Z`), speed controls and `.rewind.json` export/import.
+---
+
+## Shortcuts
+
+| Shortcut | Surface | Action |
+|---|---|---|
+| `Ctrl + Alt + Z` | Global | Toggle Time Machine HUD |
+| `Ctrl + K` | Time Machine | Search past windows & moments |
+| `Esc` | Time Machine | Close overlay |
+| `j` / `k` (or `↓` / `↑`) | Extension | Navigate events |
+| `Enter` | Extension | Rewind to event |
 
 ---
 
-## Keyboard Shortcuts
-
-### Desktop Time Machine
-
-| Shortcut | Action |
-| :--- | :--- |
-| <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Z</kbd> | Toggle the Time Machine overlay (global) |
-| <kbd>Ctrl</kbd> + <kbd>K</kbd> | Focus the search bar |
-| <kbd>←</kbd> / <kbd>→</kbd> | Step through moments |
-| <kbd>Esc</kbd> | Close the overlay |
-
-### Extension Timeline Dashboard
-
-| Shortcut | Action |
-| :--- | :--- |
-| <kbd>j</kbd> or <kbd>↓</kbd> | Next event |
-| <kbd>k</kbd> or <kbd>↑</kbd> | Previous event |
-| <kbd>Enter</kbd> | Rewind to selected moment |
-| <kbd>c</kbd> | Copy target element CSS selector |
-| <kbd>/</kbd> | Focus session search bar |
-| <kbd>Esc</kbd> | Unfocus search bar |
-
----
-
-## Privacy & security model
-
-- **Zero External Network Calls**: No telemetry, no cloud servers, no user accounts. Internal communication is strictly restricted to local loopback interfaces (`127.0.0.1:48291` JSON-RPC and `127.0.0.1:48292` HTTP bridge, plus optional local Ollama on `127.0.0.1:11434`). The overlay's Content-Security-Policy blocks all network access (`connect-src 'none'`). Note: Loopback connections are local network sockets; the extension communicates with the daemon via this loopback HTTP bridge.
-- **No Global Keylogging**: The desktop application never installs global OS keyboard hooks (`WH_KEYBOARD_LL`). The only synthetic keystroke REWIND dispatches is `Ctrl+Z` to trigger application-level Undo after focus verification (terminals and shells are excluded).
-- **Extension Input Recording & Masking**: The browser extension records user interactions in active tabs into `chrome.storage.local`. Sensitive form inputs (passwords, credit card numbers, CVVs, SSNs, 2FA/OTP tokens) are masked (`[masked]`) via best-effort heuristic denylists. Plaintext credentials should never be typed into custom unmasked fields during recorded sessions.
-- **Screenshots & Window Framebuffers**: When capture is enabled, window framebuffer previews are captured via Win32 `PrintWindow` for thumbnail previews and perceptual hashing (dHash). All frame data is stored locally in the user data directory and is never transmitted off-device.
-- **Fail-Closed State Encryption**: Saved state blobs are encrypted with AES-256-GCM using keys protected by the OS secure store (Electron `safeStorage` / DPAPI on Windows). If the secure store is unavailable, REWIND fails closed rather than degrading to weak fallback obfuscation.
-- **Sandboxed Overlay**: The overlay renderer is sandboxed (`contextIsolation: true`, `nodeIntegration: false`) and communicates only through an allow-listed IPC bridge. The main process resolves restore requests from its own internal timeline.
-- See [SECURITY.md](SECURITY.md) for vulnerability reporting and detailed security architecture.
-
----
-
-## Known Limitations
-
-- **Windows Platform Requirement**: The desktop capture engine relies on Win32 FFI via Koffi and Windows-specific system APIs (`GetWindowTextW`, `PrintWindow`, `QueryFullProcessImageNameW`). Linux and macOS desktop capture is not currently supported; the test suite mocks these Win32 APIs for cross-platform CI verification.
-- **No Shell Output or History Resurrection**: Resurrecting a terminal or shell window re-opens the terminal executable in the recorded working directory. Terminal scrollback history, command outputs, active REPLs, and background subprocesses cannot be re-instantiated.
-- **Best-Effort Window Placement**: Multi-monitor geometry restoration maps window coordinates across monitors. Because DPI scale factors, taskbars, and virtual desktop configurations vary, resurrected windows may occasionally be repositioned by Windows OS window managers.
-- **Undo is Target-Dependent**: Universal Undo sends synthetic `Ctrl+Z` to the verified target application. If the target application does not implement Undo or handles `Ctrl+Z` differently, REWIND cannot force an undo. Terminals and consoles are explicitly excluded to prevent sending ASCII `0x1A` (substitute / SIGTSTP).
-- **Heuristic Privacy Masking**: Extension field masking uses regex and attribute heuristics. Custom web inputs (e.g., canvas-based or custom web components without standard accessibility attributes) might not trigger masking. Do not record while entering sensitive passwords or credentials.
-
----
-
-## Development & Testing
+## Tests & Verification
 
 ```bash
 npm test          # 284 tests across 41 suites (Vitest, 100% passing)
 npm run lint      # ESLint (0 errors, 0 warnings)
-npm run build     # typecheck + web build
-npm run build:daemon
-npm run build:extension
+npx tsc -b        # Composite TypeScript typecheck
+npm run build     # Production build
 ```
-
----
-
-## Community & Contributing
-
-- Read **[CONTRIBUTING.md](CONTRIBUTING.md)** for workflow and pull request guidelines.
-- Review the **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** before participating.
-- Check **[SECURITY.md](SECURITY.md)** for the security policy and reporting process.
-- Release notes live in **[CHANGELOG.md](CHANGELOG.md)**.
 
 ---
 
 ## License
 
-Released under the **[MIT License](LICENSE)**.
-Copyright (c) 2026 REWIND contributors.
+MIT © Rohan Gupta
